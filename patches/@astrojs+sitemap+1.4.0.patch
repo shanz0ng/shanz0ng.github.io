@@ -1,0 +1,16 @@
+diff --git a/node_modules/@astrojs/sitemap/dist/index.js b/node_modules/@astrojs/sitemap/dist/index.js
+index aa2a09b..a6f9bd7 100644
+--- a/node_modules/@astrojs/sitemap/dist/index.js
++++ b/node_modules/@astrojs/sitemap/dist/index.js
+@@ -100,9 +100,10 @@ ${err.toString()}`);
+               return;
+             }
+           }
++          const destDir = fileURLToPath(dir).replace(/^[A-Za-z]:/, "").replace(/\\/g, "/").replace(/^\//, "");
+           await simpleSitemapAndIndex({
+             hostname: finalSiteUrl.href,
+-            destinationDir: fileURLToPath(dir),
++            destinationDir: destDir || ".",
+             sourceData: urlData,
+             limit: entryLimit,
+             gzip: false
