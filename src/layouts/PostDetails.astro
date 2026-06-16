@@ -34,46 +34,168 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       </svg><span>Go back</span>
     </button>
   </div>
-  <main id="main-content">
-    <h1 class="post-title">{title}</h1>
-    <Datetime datetime={pubDatetime} size="lg" className="my-2" />
-    <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl">
-      <Content />
-    </article>
+  <div class="post-wrapper">
+    <main id="main-content">
+      <h1 class="post-title">{title}</h1>
+      <Datetime datetime={pubDatetime} size="lg" className="my-2" />
+      <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl">
+        <Content />
+      </article>
 
-    <ul class="tags-container">
-      {tags.map(tag => <Tag name={tag} />)}
-    </ul>
+      <ul class="tags-container">
+        {tags.map(tag => <Tag name={tag} />)}
+      </ul>
 
-    <div class="giscus-wrapper mx-auto max-w-3xl mt-12">
-      <script src="https://giscus.app/client.js"
-        data-repo="shanz0ng/shanz0ng.github.io"
-        data-repo-id="R_kgDOS8UiLQ"
-        data-category="General"
-        data-category-id="DIC_kwDOS8UiLc4C_Q2i"
-        data-mapping="pathname"
-        data-strict="0"
-        data-reactions-enabled="1"
-        data-emit-metadata="0"
-        data-input-position="bottom"
-        data-theme="light"
-        data-lang="zh-CN"
-        crossorigin="anonymous"
-        async>
-      </script>
-    </div>
-  </main>
+      <div class="giscus-wrapper mx-auto max-w-3xl mt-12">
+        <script src="https://giscus.app/client.js"
+          data-repo="shanz0ng/shanz0ng.github.io"
+          data-repo-id="R_kgDOS8UiLQ"
+          data-category="General"
+          data-category-id="DIC_kwDOS8UiLc4C_Q2i"
+          data-mapping="pathname"
+          data-strict="0"
+          data-reactions-enabled="1"
+          data-emit-metadata="0"
+          data-input-position="bottom"
+          data-theme="light"
+          data-lang="zh-CN"
+          crossorigin="anonymous"
+          async>
+        </script>
+      </div>
+    </main>
+
+    <aside id="toc-sidebar" class="toc-sidebar">
+      <div class="toc-sticky">
+        <h3 class="toc-title">目录</h3>
+        <nav id="toc-nav">
+          <ul id="toc-list" class="toc-list"></ul>
+        </nav>
+      </div>
+    </aside>
+  </div>
   <Footer />
 </Layout>
 
 <style>
-  main {
-    @apply mx-auto w-full max-w-3xl px-4 pb-12;
+  .post-wrapper {
+    max-width: 72rem;
+    margin: 0 auto;
+    display: flex;
+    gap: 2rem;
+    padding: 0 1rem;
+  }
+  #main-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 48rem;
   }
   .post-title {
-    @apply text-2xl font-semibold text-skin-accent;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: rgb(var(--color-accent));
   }
   .tags-container {
-    @apply my-8;
+    margin: 2rem 0;
+  }
+
+  /* TOC Sidebar */
+  .toc-sidebar {
+    display: none;
+    width: 14rem;
+    flex-shrink: 0;
+  }
+  @media (min-width: 1024px) {
+    .toc-sidebar {
+      display: block;
+    }
+  }
+  .toc-sticky {
+    position: sticky;
+    top: 6rem;
+    padding-top: 1.5rem;
+  }
+  .toc-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: rgb(var(--color-accent));
+    margin-bottom: 0.75rem;
+  }
+  .toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+  .toc-list li {
+    margin-top: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+  .toc-list a {
+    color: rgb(var(--color-text-base));
+    opacity: 0.7;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .toc-list a:hover {
+    opacity: 1;
+    color: rgb(var(--color-accent));
+  }
+  .toc-list a.active {
+    opacity: 1;
+    color: rgb(var(--color-accent));
+    font-weight: 500;
+  }
+  .toc-list .toc-h3 {
+    padding-left: 0.75rem;
   }
 </style>
+
+<script>
+  // Build TOC from article headings
+  function buildTOC() {
+    const article = document.getElementById("article");
+    if (!article) return;
+
+    const headings = article.querySelectorAll("h2, h3");
+    if (headings.length === 0) return;
+
+    const tocList = document.getElementById("toc-list");
+    if (!tocList) return;
+
+    headings.forEach((heading) => {
+      const li = document.createElement("li");
+      li.className = heading.tagName === "H3" ? "toc-h3" : "";
+
+      const a = document.createElement("a");
+      a.href = `#${heading.id}`;
+      a.textContent = heading.textContent;
+
+      li.appendChild(a);
+      tocList.appendChild(li);
+    });
+  }
+
+  // Highlight current section on scroll
+  function highlightTOC() {
+    const article = document.getElementById("article");
+    if (!article) return;
+
+    const headings = article.querySelectorAll("h2, h3");
+    const links = document.querySelectorAll("#toc-list a");
+
+    let current = "";
+    headings.forEach((heading) => {
+      if (heading.getBoundingClientRect().top <= 120) {
+        current = heading.id;
+      }
+    });
+
+    links.forEach((link) => {
+      link.classList.toggle("active", link.getAttribute("href") === `#${current}`);
+    });
+  }
+
+  buildTOC();
+  window.addEventListener("scroll", highlightTOC, { passive: true });
+</script>

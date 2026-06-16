@@ -34,13 +34,12 @@
     
 
     <script src="/toggle-theme.js"></script>
-  <link rel="stylesheet" href="/assets-built/about.9f22bbba.css" />
+  <link rel="stylesheet" href="/assets-built/about.91df03d8.css" />
 <link rel="stylesheet" href="/assets-built/about.48d1af8d.css" />
 <link rel="stylesheet" href="/assets-built/_slug_.77c27b8f.css" />
 <link rel="stylesheet" href="/assets-built/_slug_.8f5bd007.css" />
-<link rel="stylesheet" href="/assets-built/_slug_.fff4a6a4.css" />
-<link rel="stylesheet" href="/assets-built/_slug_.9526a965.css" /><script type="module">const e=document.querySelector(".hamburger-menu"),n=document.querySelector("#menu-items")?.classList,t=document.querySelector(".icon-container")?.classList,o=document.querySelector("#first-line")?.classList,a=document.querySelector("#second-line ")?.classList,s=document.querySelector("#third-line")?.classList;e?.addEventListener("click",function(){e?.getAttribute("aria-expanded")==="false"?(e?.setAttribute("aria-expanded","true"),e?.setAttribute("aria-label","Close Menu"),n?.remove("display-none"),t?.remove("flex"),t?.add("relative"),o?.add("rotate-45","absolute","bottom-1/2"),s?.add("display-none"),a?.add("!w-full","-rotate-45","absolute","bottom-1/2")):(e?.setAttribute("aria-expanded","false"),e?.setAttribute("aria-label","Open Menu"),n?.add("display-none"),t?.add("flex"),t?.remove("relative"),o?.remove("rotate-45","absolute","bottom-1/2"),s?.remove("display-none"),a?.remove("!w-full","-rotate-45","absolute","bottom-1/2"))});
-</script></head>
+<link rel="stylesheet" href="/assets-built/_slug_.13792a02.css" />
+<link rel="stylesheet" href="/assets-built/_slug_.9526a965.css" /><script type="module" src="/assets-built/hoisted.da8ffdf9.js"></script></head>
   <body>
     
   <header class="astro-3EF6KSR2">
@@ -106,11 +105,12 @@
       </svg><span class="astro-VJ4TPSPI">Go back</span>
     </button>
   </div>
-  <main id="main-content" class="astro-VJ4TPSPI">
-    <h1 class="post-title astro-VJ4TPSPI">基于WebLogic多协议复用机制的隐蔽内存马注入</h1>
-    <div class="flex items-center space-x-2 opacity-80 my-2 astro-VJ4TPSPI"><svg xmlns="http://www.w3.org/2000/svg" class="scale-100 inline-block h-6 w-6 fill-skin-base" aria-hidden="true"><path d="M7 11h2v2H7zm0 4h2v2H7zm4-4h2v2h-2zm0 4h2v2h-2zm4-4h2v2h-2zm0 4h2v2h-2z"></path><path d="M5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM19 8l.001 12H5V8h14z"></path></svg><span class="sr-only">Posted on:</span><span class="italic text-base">2026年6月16日<span aria-hidden="true"> | </span><span class="sr-only"> at </span>08:00</span></div>
-    <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl astro-VJ4TPSPI">
-      <p>某次项目中遇到一套 WebLogic 环境：WebLogic Server 12.2.1.x，单端口 7001 对外。边界 WAF 严格拦截了常规 HTTP 协议的恶意 Payload；RASP 系统对 Servlet/Filter 内存马的注册和调用进行了严密监控。</p>
+  <div class="post-wrapper astro-VJ4TPSPI">
+    <main id="main-content" class="astro-VJ4TPSPI">
+      <h1 class="post-title astro-VJ4TPSPI">基于WebLogic多协议复用机制的隐蔽内存马注入</h1>
+      <div class="flex items-center space-x-2 opacity-80 my-2 astro-VJ4TPSPI"><svg xmlns="http://www.w3.org/2000/svg" class="scale-100 inline-block h-6 w-6 fill-skin-base" aria-hidden="true"><path d="M7 11h2v2H7zm0 4h2v2H7zm4-4h2v2h-2zm0 4h2v2h-2zm4-4h2v2h-2zm0 4h2v2h-2z"></path><path d="M5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM19 8l.001 12H5V8h14z"></path></svg><span class="sr-only">Posted on:</span><span class="italic text-base">2026年6月16日<span aria-hidden="true"> | </span><span class="sr-only"> at </span>08:00</span></div>
+      <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl astro-VJ4TPSPI">
+        <p>某次项目中遇到一套 WebLogic 环境：WebLogic Server 12.2.1.x，单端口 7001 对外。边界 WAF 严格拦截了常规 HTTP 协议的恶意 Payload；RASP 系统对 Servlet/Filter 内存马的注册和调用进行了严密监控。</p>
 <p>但有个细节——7001 这个端口不只是 HTTP。WebLogic 的单端口复用机制让它同时承载 T3、IIOP、LDAP、SNMP、HTTP 五种协议。</p>
 <p>这就引出一个想法：<strong>能不能不走 HTTP 层？</strong> 如果能在协议分发那层——就是 WebLogic 判断”这个连接归谁”的地方——插一个自定义处理器，后续通信都由劫持后的 handler 直接处理，完全不经过 HTTP 层。</p>
 <h2 id="一本地调试定位协议分发">一、本地调试：定位协议分发</h2>
@@ -495,10 +495,10 @@
 <p>拆开一次连接的完整过程：</p>
 <p><img src="/images/weblogic-memory-shell/15.png" alt="Wireshark 单次连接 - Follow TCP Stream"></p>
 <p>请求方向以 <code>0x33</code> 开头，后面全是 base64 密文；响应方向是 payload 执行结果的原生字节，Wireshark 没有对应协议的解析器。</p>
-    </article>
+      </article>
 
-    <ul class="tags-container astro-VJ4TPSPI">
-      <li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+      <ul class="tags-container astro-VJ4TPSPI">
+        <li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
   <a href="/tags/weblogic" class="text-sm pr-2 group astro-BLWJYJPT">
     <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
     </svg>
@@ -523,13 +523,23 @@
     &nbsp;<span class="astro-BLWJYJPT">java</span>
   </a>
 </li>
-    </ul>
+      </ul>
 
-    <div class="giscus-wrapper mx-auto max-w-3xl mt-12 astro-VJ4TPSPI">
-      <script src="https://giscus.app/client.js" data-repo="shanz0ng/shanz0ng.github.io" data-repo-id="R_kgDOS8UiLQ" data-category="General" data-category-id="DIC_kwDOS8UiLc4C_Q2i" data-mapping="pathname" data-strict="0" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="zh-CN" crossorigin="anonymous" async>
-      </script>
-    </div>
-  </main>
+      <div class="giscus-wrapper mx-auto max-w-3xl mt-12 astro-VJ4TPSPI">
+        <script src="https://giscus.app/client.js" data-repo="shanz0ng/shanz0ng.github.io" data-repo-id="R_kgDOS8UiLQ" data-category="General" data-category-id="DIC_kwDOS8UiLc4C_Q2i" data-mapping="pathname" data-strict="0" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="zh-CN" crossorigin="anonymous" async>
+        </script>
+      </div>
+    </main>
+
+    <aside id="toc-sidebar" class="toc-sidebar astro-VJ4TPSPI">
+      <div class="toc-sticky astro-VJ4TPSPI">
+        <h3 class="toc-title astro-VJ4TPSPI">目录</h3>
+        <nav id="toc-nav" class="astro-VJ4TPSPI">
+          <ul id="toc-list" class="toc-list astro-VJ4TPSPI"></ul>
+        </nav>
+      </div>
+    </aside>
+  </div>
   <footer class="mt-auto astro-SZ7XMLTE">
   <div class="max-w-3xl mx-auto px-0">
   <hr class="border-skin-line" aria-hidden="true">
@@ -561,3 +571,4 @@
 </footer>
 
   </body></html>
+

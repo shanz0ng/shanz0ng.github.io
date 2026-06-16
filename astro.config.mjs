@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import remarkToc from "remark-toc";
 import remarkCollapse from "remark-collapse";
+import rehypeSlug from "rehype-slug";
 import sitemap from "@astrojs/sitemap";
 import { SITE } from "./src/config";
 
@@ -25,6 +26,7 @@ export default defineConfig({
         },
       ],
     ],
+    rehypePlugins: [rehypeSlug],
     shikiConfig: {
       theme: "one-dark-pro",
       wrap: true,
