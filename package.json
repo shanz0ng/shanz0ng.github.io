@@ -1,0 +1,32 @@
+{
+  "name": "shanz0ng-blog",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@astrojs/react": "^1.2.2",
+    "@astrojs/rss": "^2.3.0",
+    "@astrojs/sitemap": "^1.4.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "@tailwindcss/typography": "^0.5.20",
+    "astro": "^2.1.5",
+    "astro-paper": "^2.2.0",
+    "autoprefixer": "^10.5.0",
+    "fuse.js": "^6.6.2",
+    "github-slugger": "^2.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remark-collapse": "^0.1.2",
+    "remark-toc": "^8.0.1",
+    "satori": "^0.4.14",
+    "sitemap": "^6.4.0",
+    "tailwindcss": "^3.2.7"
+  }
+}
