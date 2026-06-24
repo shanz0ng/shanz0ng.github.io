@@ -188,6 +188,13 @@ declare module 'astro:content' {
 
 	type ContentEntryMap = {
 		"blog": {
+"cc-functors-functional-programming.md": {
+	id: "cc-functors-functional-programming.md";
+  slug: "cc-functors-functional-programming";
+  body: string;
+  collection: "blog";
+  data: InferEntrySchema<"blog">
+} & { render(): Render[".md"] };
 "weblogic-memory-shell.md": {
 	id: "weblogic-memory-shell.md";
   slug: "weblogic-memory-shell";
