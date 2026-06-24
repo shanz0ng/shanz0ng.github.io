@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="canonical" href="https://shanz0ng.github.io/posts/cc-functors-functional-programming/">
+    <meta name="generator" content="Astro v2.10.15">
+
+    <!-- General Meta Tags -->
+    <title>三块积木，一把枪——CC 组件里的函数式编程</title>
+    <meta name="title" content="三块积木，一把枪——CC 组件里的函数式编程">
+    <meta name="description" content="从函数式编程的视角重新审视 Commons Collections 的 functor 体系：ConstantTransformer、InvokerTransformer、ChainedTransformer 三块积木如何被组合成 CC1 攻击链，以及 TransformedMap.setValue() 为何成为扳机。">
+    <meta name="author" content="山宗">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="三块积木，一把枪——CC 组件里的函数式编程">
+    <meta property="og:description" content="从函数式编程的视角重新审视 Commons Collections 的 functor 体系：ConstantTransformer、InvokerTransformer、ChainedTransformer 三块积木如何被组合成 CC1 攻击链，以及 TransformedMap.setValue() 为何成为扳机。">
+    <meta property="og:url" content="https://shanz0ng.github.io/posts/cc-functors-functional-programming/">
+    <meta property="og:image" content="https://shanz0ng.github.io/%E4%B8%89%E5%9D%97%E7%A7%AF%E6%9C%A8%EF%BC%8C%E4%B8%80%E6%8A%8A%E6%9E%AA%E2%80%94%E2%80%94CC%20%E7%BB%84%E4%BB%B6%E9%87%8C%E7%9A%84%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://shanz0ng.github.io/posts/cc-functors-functional-programming/">
+    <meta property="twitter:title" content="三块积木，一把枪——CC 组件里的函数式编程">
+    <meta property="twitter:description" content="从函数式编程的视角重新审视 Commons Collections 的 functor 体系：ConstantTransformer、InvokerTransformer、ChainedTransformer 三块积木如何被组合成 CC1 攻击链，以及 TransformedMap.setValue() 为何成为扳机。">
+    <meta property="twitter:image" content="https://shanz0ng.github.io/%E4%B8%89%E5%9D%97%E7%A7%AF%E6%9C%A8%EF%BC%8C%E4%B8%80%E6%8A%8A%E6%9E%AA%E2%80%94%E2%80%94CC%20%E7%BB%84%E4%BB%B6%E9%87%8C%E7%9A%84%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B.png">
+
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+
+    
+
+    <script src="/toggle-theme.js"></script>
+  <link rel="stylesheet" href="/assets-built/about.a371705f.css" />
+<link rel="stylesheet" href="/assets-built/about.48d1af8d.css" />
+<link rel="stylesheet" href="/assets-built/_slug_.77c27b8f.css" />
+<link rel="stylesheet" href="/assets-built/_slug_.8f5bd007.css" />
+<link rel="stylesheet" href="/assets-built/_slug_.13792a02.css" />
+<link rel="stylesheet" href="/assets-built/_slug_.9526a965.css" /><script type="module" src="/assets-built/hoisted.da8ffdf9.js"></script></head>
+  <body>
+    
+  <header class="astro-3EF6KSR2">
+  <a id="skip-to-content" href="#main-content" class="astro-3EF6KSR2">Skip to content</a>
+  <div class="nav-container astro-3EF6KSR2">
+    <div class="top-nav-wrap astro-3EF6KSR2">
+      <a href="/" class="logo astro-3EF6KSR2">
+        山宗的blog
+      </a>
+      <nav id="nav-menu" class="astro-3EF6KSR2">
+        <button class="hamburger-menu focus-outline astro-3EF6KSR2" aria-label="Open Menu" aria-expanded="false" aria-controls="menu-items">
+          <div class="icon-container flex astro-3EF6KSR2">
+            <div id="first-line" class="astro-3EF6KSR2"></div>
+            <div id="second-line" class="astro-3EF6KSR2"></div>
+            <div id="third-line" class="astro-3EF6KSR2"></div>
+          </div>
+        </button>
+        <ul id="menu-items" class="display-none sm:flex astro-3EF6KSR2">
+          <li class="astro-3EF6KSR2">
+            <a href="/posts" class=" astro-3EF6KSR2">
+              Posts
+            </a>
+          </li>
+          <li class="astro-3EF6KSR2">
+            <a href="/tags" class=" astro-3EF6KSR2">
+              Tags
+            </a>
+          </li>
+          <li class="astro-3EF6KSR2">
+            <a href="/about" class=" astro-3EF6KSR2">
+              About
+            </a>
+          </li>
+          <li class="astro-3EF6KSR2">
+            <a type="button" href="/search" tabindex="0" class="group focus-outline p-3 sm:p-1  astro-3EF6KSR2 astro-5EUNQZKT" aria-label="search" title="Search">
+  
+              <svg xmlns="http://www.w3.org/2000/svg" class="scale-125 sm:scale-100 astro-3EF6KSR2"><path d="M19.023 16.977a35.13 35.13 0 0 1-1.367-1.384c-.372-.378-.596-.653-.596-.653l-2.8-1.337A6.962 6.962 0 0 0 16 9c0-3.859-3.14-7-7-7S2 5.141 2 9s3.14 7 7 7c1.763 0 3.37-.66 4.603-1.739l1.337 2.8s.275.224.653.596c.387.363.896.854 1.384 1.367l1.358 1.392.604.646 2.121-2.121-.646-.604c-.379-.372-.885-.866-1.391-1.36zM9 14c-2.757 0-5-2.243-5-5s2.243-5 5-5 5 2.243 5 5-2.243 5-5 5z" class="astro-3EF6KSR2"></path>
+              </svg>
+            
+</a>
+          </li>
+          <li class="astro-3EF6KSR2">
+            <button id="theme-btn" class="focus-outline astro-3EF6KSR2" title="Toggles light & dark" aria-label="auto" aria-live="polite">
+                  <svg xmlns="http://www.w3.org/2000/svg" id="moon-svg" class="astro-3EF6KSR2">
+                    <path d="M20.742 13.045a8.088 8.088 0 0 1-2.077.271c-2.135 0-4.14-.83-5.646-2.336a8.025 8.025 0 0 1-2.064-7.723A1 1 0 0 0 9.73 2.034a10.014 10.014 0 0 0-4.489 2.582c-3.898 3.898-3.898 10.243 0 14.143a9.937 9.937 0 0 0 7.072 2.93 9.93 9.93 0 0 0 7.07-2.929 10.007 10.007 0 0 0 2.583-4.491 1.001 1.001 0 0 0-1.224-1.224zm-2.772 4.301a7.947 7.947 0 0 1-5.656 2.343 7.953 7.953 0 0 1-5.658-2.344c-3.118-3.119-3.118-8.195 0-11.314a7.923 7.923 0 0 1 2.06-1.483 10.027 10.027 0 0 0 2.89 7.848 9.972 9.972 0 0 0 7.848 2.891 8.036 8.036 0 0 1-1.484 2.059z" class="astro-3EF6KSR2"></path>
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" id="sun-svg" class="astro-3EF6KSR2">
+                    <path d="M6.993 12c0 2.761 2.246 5.007 5.007 5.007s5.007-2.246 5.007-5.007S14.761 6.993 12 6.993 6.993 9.239 6.993 12zM12 8.993c1.658 0 3.007 1.349 3.007 3.007S13.658 15.007 12 15.007 8.993 13.658 8.993 12 10.342 8.993 12 8.993zM10.998 19h2v3h-2zm0-17h2v3h-2zm-9 9h3v2h-3zm17 0h3v2h-3zM4.219 18.363l2.12-2.122 1.415 1.414-2.12 2.122zM16.24 6.344l2.122-2.122 1.414 1.414-2.122 2.122zM6.342 7.759 4.22 5.637l1.415-1.414 2.12 2.122zm13.434 10.605-1.414 1.414-2.122-2.122 1.414-1.414z" class="astro-3EF6KSR2"></path>
+                  </svg>
+                </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+  <div class="max-w-3xl mx-auto px-4">
+  <hr class="border-skin-line" aria-hidden="true">
+</div>
+</header>
+  <div class="mx-auto flex w-full max-w-3xl justify-start px-2 astro-VJ4TPSPI">
+    <button class="focus-outline mt-8 mb-2 flex hover:opacity-75 astro-VJ4TPSPI" onclick="history.back()">
+      <svg xmlns="http://www.w3.org/2000/svg" class="astro-VJ4TPSPI"><path d="M13.293 6.293 7.586 12l5.707 5.707 1.414-1.414L10.414 12l4.293-4.293z" class="astro-VJ4TPSPI"></path>
+      </svg><span class="astro-VJ4TPSPI">Go back</span>
+    </button>
+  </div>
+  <div class="post-wrapper astro-VJ4TPSPI">
+    <main id="main-content" class="astro-VJ4TPSPI">
+      <h1 class="post-title astro-VJ4TPSPI">三块积木，一把枪——CC 组件里的函数式编程</h1>
+      <div class="flex items-center space-x-2 opacity-80 my-2 astro-VJ4TPSPI"><svg xmlns="http://www.w3.org/2000/svg" class="scale-100 inline-block h-6 w-6 fill-skin-base" aria-hidden="true"><path d="M7 11h2v2H7zm0 4h2v2H7zm4-4h2v2h-2zm0 4h2v2h-2zm4-4h2v2h-2zm0 4h2v2h-2z"></path><path d="M5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM19 8l.001 12H5V8h14z"></path></svg><span class="sr-only">Posted on:</span><span class="italic text-base">2026年6月24日<span aria-hidden="true"> | </span><span class="sr-only"> at </span>08:00</span></div>
+      <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl astro-VJ4TPSPI">
+        <h1 id="三块积木一把枪cc-组件里的函数式编程">三块积木，一把枪——CC 组件里的函数式编程</h1>
+<hr>
+<h2 id="一背景2004-年cc-开发者想在-java-里实现函数式编程">一、背景：2004 年，CC 开发者想在 Java 里实现函数式编程</h2>
+<p>2000 年代初，Java 没有泛型，没有 lambda，没有 <code>java.util.function</code>。而当时 Haskell、Lisp、Erlang、Scala 早已把函数式编程做得很成熟。</p>
+<p>CC 设计者用了三年、分两个阶段搭出这套体系：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>年份</th><th>内容</th></tr></thead><tbody><tr><td>CC 1.0</td><td>~2001</td><td><code>Transformer</code>、<code>Predicate</code>、<code>Closure</code> 三个 functor 接口</td></tr><tr><td>CC 2.1</td><td>~2002</td><td><code>Factory</code> 接口</td></tr><tr><td>CC 3.0</td><td>2004年6月</td><td><code>ConstantTransformer</code>、<code>InvokerTransformer</code>、<code>ChainedTransformer</code> 等 40+ 个实现类</td></tr></tbody></table>
+<p>先定接口，再写实现——三年后才有了完整的 functor 体系。</p>
+<p>Apache Commons 的开发者想给 Java 也加上这种函数式编程的能力。但 Java 里没有”函数”这种类型，他们只能用<strong>接口</strong>来模拟函数。他们定义了四个核心接口：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>接口</th><th>方法签名</th><th>十年后 Java 8 的对应</th></tr></thead><tbody><tr><td><code>Transformer</code></td><td><code>Object transform(Object input)</code></td><td><code>Function&#x3C;T, R></code></td></tr><tr><td><code>Predicate</code></td><td><code>boolean evaluate(Object obj)</code></td><td><code>Predicate&#x3C;T></code></td></tr><tr><td><code>Closure</code></td><td><code>void execute(Object input)</code></td><td><code>Consumer&#x3C;T></code></td></tr><tr><td><code>Factory</code></td><td><code>Object create()</code></td><td><code>Supplier&#x3C;T></code></td></tr></tbody></table>
+<p>实现类放在 <code>org.apache.commons.collections.functors</code> 包下——“functor” 是函数式编程术语，意思是”可以像函数一样被调用的对象”。</p>
+<p>CC 3.0 源码中，四个接口的 Javadoc 第一句话都写了</p>
+<p><code>Defines a functor interface</code>（定义一个 functor 接口）：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// Transformer.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    transform one object into another. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Predicate.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    perform a predicate test on an object. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Closure.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    do something. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Factory.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    create objects. */</span></span></code></pre>
+<p>其中有三块最基础的积木，构成了函数式编程的核心：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数学公式</th><th>CC 实现类</th></tr></thead><tbody><tr><td><code>f(x) = c</code>（常量函数）</td><td><code>ConstantTransformer</code></td></tr><tr><td><code>f(x) = x.m(a)</code>（对输入调用方法）</td><td><code>InvokerTransformer</code></td></tr><tr><td><code>f(x) = f₃(f₂(f₁(x)))</code>（函数复合）</td><td><code>ChainedTransformer</code></td></tr></tbody></table>
+<p><code>ConstantTransformer</code> 的存在本身就是证据——一个只做集合回调的库，不需要常量函数。十年后 Java 8 发布，<code>java.util.function</code> 包用几乎相同的概念体系验证了这个方向的正确性。</p>
+<h2 id="二函数式编程是什么">二、函数式编程是什么</h2>
+<p>理解函数式编程，抓住三个词就够了：值、参数、管道。</p>
+<p>函数式编程，就是把”做什么”从代码里拆出来，变成可传递的积木。放到变量里是值，传给方法是参数，头尾接起来是管道。</p>
+<p>这个概念比 Java 老得多——它的数学根基可以追溯到 1930 年代——数学家阿隆佐·丘奇提出了 λ 演算（lambda calculus），
+核心思想就是把”计算”表达成 f(x)：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">f(x) = x² + 1    ← 我们高中学的，输入 x，输出结果，不改任何外部状态</span></span></code></pre>
+<p>CC 的 Transformer，本质上就是这个 f(x)。</p>
+<p>先看一条大家都非常熟悉的命令：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #56B6C2">echo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">baidu.com</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./SubFinder/subfinder</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./KsubDomain/ksubdomain</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTProbe/httprobe</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTPX/httpx</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-title/-ip</span></span></code></pre>
+<p>它的作用是：从 baidu.com 出发，发现子域名，筛选存活的，加上 https://，提取页面标题。每一步是一个独立的工具，管道符把这些工具串成了流水线，上一个工具的输出是下一个工具的输入。</p>
+<p>这条命令里藏着函数式编程的三个概念，拆开看——</p>
+<h3 id="1-函数是值-fx--c">1. 函数是值 <code>f(x) = c</code></h3>
+<p>把”一个操作”赋给变量、存起来、随时用。</p>
+<p>管道里的第一个命令 <code>echo baidu.com</code> 就是一个值——不管管道前面有没有输入，
+它永远返回 <code>"baidu.com"</code>。在 CC 里这就是 F1：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #61AFEF">F1</span><span style="color: #E06C75">(</span><span style="color: #98C379">"baidu.com"</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">transform</span><span style="color: #ABB2BF">(</span><span style="color: #D19A66">null</span><span style="color: #ABB2BF">);</span><span style="color: #E06C75">  </span><span style="color: #7F848E; font-style: italic">// → "baidu.com"</span></span></code></pre>
+<h3 id="2-函数可以当参数传-fx--xma">2. 函数可以当参数传 <code>f(x) = x.m(a)</code></h3>
+<p>把”一个操作”传给另一个方法，让它帮你执行。</p>
+<p><code>echo</code> 后面的 <code>subfinder</code>、<code>ksubdomain</code>、<code>httprobe</code>、<code>httpx</code>，每个都是一个被传进管道的函数。它不关心数据从哪来，只等待前面的输出进入自己的输入。每个等价于一次 <code>F2("方法名")</code>——反射调用，在输入上执行对应方法。</p>
+<h3 id="3-函数可以串起来复合fx--fffx">3. 函数可以串起来（复合）<code>f(x) = f₃(f₂(f₁(x)))</code></h3>
+<p>前一步的输出 = 后一步的输入，形成流水线。整条管道就是函数复合：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">f(baidu.com) = httpx(httprobe(ksubdomain(subfinder(baidu.com))))</span></span>
+<span class="line"><span style="color: #abb2bf">//             f4(     f3(      f2(       f1(      x     ))))</span></span></code></pre>
+<p>管道符隔开的每个命令是一个函数，<code>ChainedTransformer</code> 就是 Java 里的管道符。</p>
+<h3 id="cc-用-40-个类实现了这套体系">CC 用 40+ 个类实现了这套体系</h3>
+<p>上面三类基础函数是积木，CC 的 functors 包里 40+ 个类都是它们的变体和组合。</p>
+<hr>
+<h2 id="三把管道符翻译成-java">三、把管道符翻译成 Java</h2>
+<p>三块积木单独看不出用处。拼在一起就是一条流水线——和 Linux 管道符一模一样：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #56B6C2">echo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">baidu.com</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./SubFinder/subfinder</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./KsubDomain/ksubdomain</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTProbe/httprobe</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTPX/httpx</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-title/-ip</span></span></code></pre>
+<p>每条命令是一个函数，管道符把前一个输出喂给后一个输入：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">echo baidu.com  → F1("baidu.com")     = 常量函数，提供起始值</span></span>
+<span class="line"><span style="color: #abb2bf">subfinder      → F2("subfinder")     = 反射调用方法</span></span>
+<span class="line"><span style="color: #abb2bf">ksubdomain     → F2("ksubdomain")    = 反射调用方法</span></span>
+<span class="line"><span style="color: #abb2bf">httprobe       → F2("httprobe")      = 反射调用方法</span></span>
+<span class="line"><span style="color: #abb2bf">httpx          → F2("httpx")         = 反射调用方法</span></span>
+<span class="line"><span style="color: #abb2bf">整条管道        → F3([F1,F2,F2,F2,F2]) = 函数复合</span></span></code></pre>
+<p>三个积木的定义：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// F1：f(x) = c — 不管输入是什么，永远返回固定值</span></span>
+<span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F1</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> constant) {</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ConstantTransformer</span><span style="color: #E06C75">(constant)</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// F2：f(x) = x.m(a) — 在输入上反射调用方法</span></span>
+<span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F2</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">String</span><span style="color: #E06C75"> method</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[] types</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[] args) {</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">InvokerTransformer</span><span style="color: #E06C75">(method</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> types</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> args)</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// F3：f(x) = f₃(f₂(f₁(x))) — 把多个函数串成管道</span></span>
+<span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F3</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75">[] transformers) {</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ChainedTransformer</span><span style="color: #E06C75">(transformers)</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
+<p>2004 年，Java 1.4 没有函数式编程，写法是这样的：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// 2004 年，没有泛型，没有方法链，每步一个中间变量</span></span>
+<span class="line"><span style="color: #E5C07B">String</span><span style="color: #E06C75"> domain </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #98C379">"baidu.com"</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E5C07B">List</span><span style="color: #E06C75"> subs </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">SubFinder</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getSubdomains</span><span style="color: #ABB2BF">(domain);</span></span>
+<span class="line"><span style="color: #E5C07B">List</span><span style="color: #E06C75"> alive </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">KsubDomain</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">filterAlive</span><span style="color: #ABB2BF">(subs);</span></span>
+<span class="line"><span style="color: #E5C07B">List</span><span style="color: #E06C75"> urls </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">HttpProbe</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">addHttps</span><span style="color: #ABB2BF">(alive);</span></span>
+<span class="line"><span style="color: #E5C07B">List</span><span style="color: #E06C75"> results </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">HttpX</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">extractTitles</span><span style="color: #ABB2BF">(urls);</span></span></code></pre>
+<p>CC 提供了 F1、F2、F3 三块积木——当你把每一步包成 <code>Transformer</code>，<code>ChainedTransformer</code> 替你管数据流，你不用手写中间变量了。</p>
+<h2 id="四设计者没预料到的用法">四、设计者没预料到的用法</h2>
+<p>F1、F2、F3 是通用积木。设计者没有限制你能传什么参数——函数式编程本来就不该限制。</p>
+<p>但攻击者发现：<strong>一模一样的三块积木，把参数换掉，就能执行任意代码。</strong></p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">设计者往管道里装的：            攻击者往管道里装的：</span></span>
+<span class="line"><span style="color: #abb2bf">─────────────────────          ─────────────────────</span></span>
+<span class="line"><span style="color: #abb2bf">F1("baidu.com")                F1(Runtime.class)</span></span>
+<span class="line"><span style="color: #abb2bf">F2("subfinder")                F2("getMethod", [String,Class[]], ["getRuntime",null])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("ksubdomain")               F2("invoke",    [Object,Object[]], [null,null])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("httprobe")                 F2("exec",      [String],          ["calc"])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("httpx")</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">F3 管道 = 一模一样，没变</span></span></code></pre>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// 还是那F1、F2、F3 三块积木</span></span>
+<span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F4</span><span style="color: #E06C75">() {</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F3</span><span style="color: #E06C75">(</span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75">[]{</span></span>
+<span class="line"><span style="color: #E06C75">        </span><span style="color: #61AFEF">F1</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Runtime</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">        </span><span style="color: #61AFEF">F2</span><span style="color: #E06C75">(</span><span style="color: #98C379">"getMethod"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]{</span><span style="color: #E5C07B">String</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">}</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">           </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]{</span><span style="color: #98C379">"getRuntime"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #E06C75">})</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">        </span><span style="color: #61AFEF">F2</span><span style="color: #E06C75">(</span><span style="color: #98C379">"invoke"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]{</span><span style="color: #E5C07B">Object</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">}</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">           </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]{</span><span style="color: #D19A66">null</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #E06C75">})</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">        </span><span style="color: #61AFEF">F2</span><span style="color: #E06C75">(</span><span style="color: #98C379">"exec"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]{</span><span style="color: #E5C07B">String</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">}</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">           </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]{</span><span style="color: #98C379">"calc"</span><span style="color: #E06C75">})</span></span>
+<span class="line"><span style="color: #E06C75">    })</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span>
+<span class="line"><span style="color: #61AFEF">F4</span><span style="color: #E06C75">()</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">transform</span><span style="color: #ABB2BF">(</span><span style="color: #D19A66">null</span><span style="color: #ABB2BF">);</span><span style="color: #E06C75">  </span><span style="color: #7F848E; font-style: italic">// calc 弹出</span></span></code></pre>
+<p><strong>这不是后门。</strong> API 没变，设计意图没变。变的是传进去的参数。设计者造了积木，攻击者用这些积木搭了一把枪。</p>
+<hr>
+<h2 id="五设计深度为什么-setvalue-会成为扳机">五、设计深度：为什么 setValue 会成为扳机</h2>
+<p>上面那条链，是我们自己手动调用 <code>transform()</code> 才跑起来的。</p>
+<p>但真正的反序列化攻击不能指望手工点火——必须有一个反序列化过程中自动触发的入口，帮你调用到那条链。</p>
+<p>到这里只差一个问题：<strong>谁在反序列化时帮你调了 <code>transform()</code>？</strong></p>
+<h3 id="map-的两个写入入口put-和-setvalue">Map 的两个写入入口：<code>put()</code> 和 <code>setValue()</code></h3>
+<p>往 Map 里写值，直觉上就是 <code>map.put(key, value)</code>。但 Map 还有第二个写入入口：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">map</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">entrySet</span><span style="color: #ABB2BF">().</span><span style="color: #61AFEF">iterator</span><span style="color: #ABB2BF">().</span><span style="color: #61AFEF">next</span><span style="color: #ABB2BF">().</span><span style="color: #61AFEF">setValue</span><span style="color: #ABB2BF">(newValue);</span></span></code></pre>
+<p>拿到 <code>Map.Entry</code> 之后可以直接改值，完全绕过 <code>put()</code>。只拦 put 不拦 setValue，就像装了防盗门却没锁窗户——那条转换规则形同虚设。</p>
+<p>解决办法很直接：<code>entrySet()</code> 不返回原始的 Entry，而是包一层带检查逻辑的 Entry 再给你。</p>
+<p>核心代码可以浓缩成这样：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">setValue</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> value) {</span></span>
+<span class="line"><span style="color: #E06C75">    value </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">parent</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">checkSetValue</span><span style="color: #ABB2BF">(value);</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">entry</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">setValue</span><span style="color: #ABB2BF">(value);</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
+<p>它的意思非常直接：</p>
+<ol>
+<li>先别把新值写回去</li>
+<li>先交给 <code>parent.checkSetValue(value)</code> 处理</li>
+<li>处理完，再真正写入底层 Map</li>
+</ol>
+<p>这里的 <code>parent</code>，就是外层那个装饰器对象。</p>
+<h3 id="为什么这一步会连到-transform">为什么这一步会连到 <code>transform()</code>？</h3>
+<p>因为在 <code>TransformedMap</code> 里，<code>checkSetValue()</code> 被重写成了下面这样：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">protected</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">checkSetValue</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> value) {</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">valueTransformer</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">transform</span><span style="color: #ABB2BF">(value);</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
+<p>于是，整条路径就通了：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">entry.setValue(x)</span></span>
+<span class="line"><span style="color: #abb2bf">   ↓</span></span>
+<span class="line"><span style="color: #abb2bf">checkSetValue(x)</span></span>
+<span class="line"><span style="color: #abb2bf">   ↓</span></span>
+<span class="line"><span style="color: #abb2bf">valueTransformer.transform(x)</span></span></code></pre>
+<p>看到这里，标题里的问题就有答案了：</p>
+<blockquote>
+<p><strong><code>setValue()</code> 会成为扳机，不是因为它特殊，而是因为 <code>TransformedMap</code> 必须保证连这条写入路径也会触发转换。</strong></p>
+</blockquote>
+<h3 id="这不是-bug是完整的设计">这不是 bug，是完整的设计</h3>
+<p>站在组件作者视角，这套设计完全说得通。</p>
+<p>他想解决的是”所有写入操作统一过一遍转换”的问题：</p>
+<p>无论你是 <code>put()</code>，还是先拿到 <code>Entry</code> 再 <code>setValue()</code>，只要你往这个 Map 里写数据，就都应该先过一遍转换逻辑。这样规则才一致。</p>
+<p>从这个角度看，<code>TransformedMap</code> 不是写错了，只是考虑得比较全面。</p>
+<p>如果愿意套设计模式的术语，这里其实就是模板方法模式：</p>
+<ul>
+<li>父类规定流程：<code>setValue()</code> → <code>checkSetValue()</code> → 真正写入</li>
+<li>子类决定细节：<code>checkSetValue()</code> 到底做什么</li>
+<li><code>TransformedMap</code> 给出的具体答案是：调用 <code>Transformer</code></li>
+</ul>
+<h3 id="这和攻击是怎么接上的">这和攻击是怎么接上的？</h3>
+<p>攻击者关心的不是”这个设计优不优雅”，而是另一件事：</p>
+<blockquote>
+<p>只要反序列化过程中，有人替我调用了 <code>entry.setValue()</code>，就等于替我触发了 <code>transform()</code>。</p>
+</blockquote>
+<p>而 <code>AnnotationInvocationHandler.readObject()</code> 恰好会在反序列化时遍历 Map 的 entry，并在类型不匹配时调用 <code>entry.setValue()</code>——链路闭合。</p>
+<p>CC1 真正微妙的地方在于：它利用的不是一个 bug，而是一个刻意留下的扩展点。<code>setValue()</code> 之所以会触发 <code>transform()</code>，正是因为设计者想保证”所有写入都经过转换”——这恰恰是 <code>TransformedMap</code> 的正确行为。</p>
+<h3 id="五个零件一把枪">五个零件，一把枪</h3>
+<p>到这里，可以把整条链重新看成一把枪：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">         ConstantTransformer = 子弹（Runtime.class）</span></span>
+<span class="line"><span style="color: #abb2bf">         InvokerTransformer  = 火药（三节，getMethod → invoke → exec）</span></span>
+<span class="line"><span style="color: #abb2bf">         ChainedTransformer  = 枪管（串联全部火药）</span></span>
+<span class="line"><span style="color: #abb2bf">         TransformedMap      = 扳机（setValue → checkSetValue → transform）</span></span>
+<span class="line"><span style="color: #abb2bf">         AnnotationInvocationHandler.readObject() = 扣动扳机</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">          Runtime.class</span></span>
+<span class="line"><span style="color: #abb2bf">          ┌──────┐</span></span>
+<span class="line"><span style="color: #abb2bf">          │ 子弹  │</span></span>
+<span class="line"><span style="color: #abb2bf">          └──┬───┘</span></span>
+<span class="line"><span style="color: #abb2bf">             │  getMethod → invoke → exec</span></span>
+<span class="line"><span style="color: #abb2bf">  ┌──────────┼──────────────────────────┐</span></span>
+<span class="line"><span style="color: #abb2bf">  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │  ← 枪管 (ChainedTransformer)</span></span>
+<span class="line"><span style="color: #abb2bf">  │     一节火药       二节火药       三节火药   │</span></span>
+<span class="line"><span style="color: #abb2bf">  └──────────────────────────────┬─────┘</span></span>
+<span class="line"><span style="color: #abb2bf">                                 │</span></span>
+<span class="line"><span style="color: #abb2bf">                            ┌────┴────┐</span></span>
+<span class="line"><span style="color: #abb2bf">                            │  扳机    │  ← setValue()</span></span>
+<span class="line"><span style="color: #abb2bf">                            └────┬────┘     (TransformedMap)</span></span>
+<span class="line"><span style="color: #abb2bf">                                 │</span></span>
+<span class="line"><span style="color: #abb2bf">                            ┌────┴────┐</span></span>
+<span class="line"><span style="color: #abb2bf">                            │ 扣动扳机 │  ← readObject()</span></span>
+<span class="line"><span style="color: #abb2bf">                            └─────────┘     (AnnotationInvocationHandler)</span></span></code></pre>
+<p>每个零件单独拆开，都是再正常不过的设计。组合在一起，就是一把上了膛的枪。</p>
+<p>一句话总结这一章：</p>
+<blockquote>
+<p><strong><code>setValue()</code> 会成为扳机，不是因为它危险，而是因为 <code>TransformedMap</code> 必须保证连这条写入路径也会触发转换；攻击链利用的，正是这种”设计上必须成立”的一致性。</strong>
+每个零件单独拆开，都是再正常不过的设计。组合在一起，就是一把上了膛的枪。
+答案不在 CC 的 functor 包，在 CC 的其他 240 个类。</p>
+</blockquote>
+<h3 id="cc-有-273-个类functor-只有-40-多个">CC 有 273 个类，functor 只有 40 多个</h3>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">commons-collections-3.2.1.jar (273 个类)</span></span>
+<span class="line"><span style="color: #abb2bf">│</span></span>
+<span class="line"><span style="color: #abb2bf">├── 被大量使用的 (220+ 个类)</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── CollectionUtils   — isEmpty、isNotEmpty，到处都在用</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── MapUtils          — 同上</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── LRUMap            — LRU 缓存，Hibernate、Servlet 容器在用</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── MultiMap          — 一个 key 对应多个 value</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── Bag               — 计数集合（Multiset）</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── BidiMap           — 双向 Map</span></span>
+<span class="line"><span style="color: #abb2bf">│   ├── BeanMap           — JavaBean 反射成 Map</span></span>
+<span class="line"><span style="color: #abb2bf">│   └── 各种装饰器         — Unmodifiable、Synchronized、FixedSize...</span></span>
+<span class="line"><span style="color: #abb2bf">│</span></span>
+<span class="line"><span style="color: #abb2bf">└── 几乎没人用的 (40+ 个 functor 类)</span></span>
+<span class="line"><span style="color: #abb2bf">    ├── InvokerTransformer    ← CC1 的核心</span></span>
+<span class="line"><span style="color: #abb2bf">    ├── ChainedTransformer    ← CC1 的核心</span></span>
+<span class="line"><span style="color: #abb2bf">    ├── ConstantTransformer   ← CC1 的核心</span></span>
+<span class="line"><span style="color: #abb2bf">    └── ...</span></span></code></pre>
+<h3 id="依赖链你的项目不需要-cc但你的框架需要">依赖链：你的项目不需要 CC，但你的框架需要</h3>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">你的项目</span></span>
+<span class="line"><span style="color: #abb2bf">  └── spring-webmvc</span></span>
+<span class="line"><span style="color: #abb2bf">        └── ...</span></span>
+<span class="line"><span style="color: #abb2bf">              └── commons-collections-3.2.1.jar  ← 躺在这里</span></span></code></pre>
+<p>你从来没有 <code>import org.apache.commons.collections.functors.*</code>，但编译出来的 WAR 包 <code>WEB-INF/lib</code> 里，<code>commons-collections-3.2.1.jar</code> 安安静静地躺着。</p>
+<p>两个条件同时成立，CC1 链就能打穿：① classpath 上有 CC 的 jar；② 应用暴露了反序列化入口。</p>
+<p>那框架到底在用 CC 的什么？以下是 CC 3.x 中真正被广泛使用的类：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类</th><th>用途</th></tr></thead><tbody><tr><td><code>CollectionUtils</code></td><td>集合判空、过滤、转换等静态工具方法</td></tr><tr><td><code>MapUtils</code></td><td>Map 判空、安全取值</td></tr><tr><td><code>ListUtils</code></td><td>List 差集、交集、分区</td></tr><tr><td><code>LRUMap</code></td><td>LRU 缓存，Hibernate、Servlet 容器大量使用</td></tr><tr><td><code>MultiHashMap</code></td><td>一个 key 对应多个 value</td></tr><tr><td><code>Bag</code> / <code>HashBag</code></td><td>计数集合（Multiset）</td></tr><tr><td><code>BidiMap</code></td><td>双向 Map，key↔value 互查</td></tr><tr><td><code>BeanMap</code></td><td>反射 JavaBean 为 Map</td></tr><tr><td><code>FastHashMap</code></td><td>装饰器模式的快速 Map</td></tr></tbody></table>
+<p>这些才是 CC 被广泛依赖的原因。40 个 functor 类无人问津，但跟着一起被塞进了无数 classpath——门票是这些工具类买的。</p>
+<h3 id="cc-4x-的修复去掉-serializable">CC 4.x 的修复：去掉 Serializable</h3>
+<p>Apache 后来意识到问题，在 CC 4.x 中把 <code>InvokerTransformer</code> 的 <code>Serializable</code> 接口去掉了：</p>
+<p><strong>CC 3.2.1：</strong></p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #C678DD">class</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">InvokerTransformer</span><span style="color: #E06C75"> </span><span style="color: #C678DD">implements</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Serializable</span><span style="color: #E06C75"> </span><span style="color: #ABB2BF">{</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #C678DD">long</span><span style="color: #E06C75"> serialVersionUID </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #56B6C2">-</span><span style="color: #D19A66">8653385846894047688L</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">String</span><span style="color: #E06C75"> iMethodName</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[] iParamTypes</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[] iArgs</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">public</span><span style="color: #61AFEF"> </span><span style="color: #E5C07B">Object</span><span style="color: #61AFEF"> transform</span><span style="color: #ABB2BF">(</span><span style="color: #E5C07B">Object</span><span style="color: #ABB2BF"> </span><span style="color: #E06C75; font-style: italic">input</span><span style="color: #ABB2BF">)</span><span style="color: #61AFEF"> </span><span style="color: #ABB2BF">{</span></span>
+<span class="line"><span style="color: #ABB2BF">        </span><span style="color: #E5C07B">Class</span><span style="color: #ABB2BF"> </span><span style="color: #E06C75">cls</span><span style="color: #ABB2BF"> </span><span style="color: #56B6C2">=</span><span style="color: #ABB2BF"> </span><span style="color: #E5C07B">input</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getClass</span><span style="color: #ABB2BF">();</span></span>
+<span class="line"><span style="color: #ABB2BF">        </span><span style="color: #E5C07B">Method</span><span style="color: #ABB2BF"> </span><span style="color: #E06C75">method</span><span style="color: #ABB2BF"> </span><span style="color: #56B6C2">=</span><span style="color: #ABB2BF"> </span><span style="color: #E5C07B">cls</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getMethod</span><span style="color: #ABB2BF">(iMethodName, iParamTypes);</span></span>
+<span class="line"><span style="color: #ABB2BF">        </span><span style="color: #C678DD">return</span><span style="color: #ABB2BF"> </span><span style="color: #E5C07B">method</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">invoke</span><span style="color: #ABB2BF">(input, iArgs);</span></span>
+<span class="line"><span style="color: #ABB2BF">    }</span></span>
+<span class="line"><span style="color: #ABB2BF">}</span></span></code></pre>
+<p><strong>CC 4.4：</strong></p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #C678DD">class</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">InvokerTransformer</span><span style="color: #ABB2BF">&#x3C;</span><span style="color: #E5C07B">I</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">O</span><span style="color: #ABB2BF">></span><span style="color: #E06C75"> </span><span style="color: #C678DD">implements</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #ABB2BF">&#x3C;</span><span style="color: #E5C07B">I</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">O</span><span style="color: #ABB2BF">></span><span style="color: #E06C75"> </span><span style="color: #ABB2BF">{</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">String</span><span style="color: #E06C75"> iMethodName</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #ABB2BF">&#x3C;</span><span style="color: #C678DD">?</span><span style="color: #ABB2BF">></span><span style="color: #E06C75">[] iParamTypes</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[] iArgs</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">public</span><span style="color: #61AFEF"> </span><span style="color: #E5C07B">O</span><span style="color: #61AFEF"> transform</span><span style="color: #ABB2BF">(</span><span style="color: #E5C07B">Object</span><span style="color: #ABB2BF"> </span><span style="color: #E06C75; font-style: italic">input</span><span style="color: #ABB2BF">)</span><span style="color: #61AFEF"> </span><span style="color: #ABB2BF">{</span></span>
+<span class="line"><span style="color: #ABB2BF">        </span><span style="color: #7F848E; font-style: italic">// 内部逻辑完全一样</span></span>
+<span class="line"><span style="color: #ABB2BF">    }</span></span>
+<span class="line"><span style="color: #ABB2BF">}</span></span></code></pre>
+<p><code>transform()</code> 的逻辑完全没变。修复没动功能，只动了接触面：把 <code>Serializable</code> 去了。
+不能被序列化，就无法进入反序列化攻击链。另外 CC 4.x 改了包名和 groupId，迁移成本太高，
+大多数项目至今仍停留在 CC 3.x。</p>
+<h2 id="附录环境信息">附录：环境信息</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组件</th><th>版本</th></tr></thead><tbody><tr><td>JDK</td><td>1.8.0_60</td></tr><tr><td>Commons Collections</td><td>3.2.1</td></tr><tr><td>关键依赖位置</td><td><code>org.apache.commons.collections.functors</code></td></tr></tbody></table>
+      </article>
+
+      <ul class="tags-container astro-VJ4TPSPI">
+        <li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+  <a href="/tags/java" class="text-sm pr-2 group astro-BLWJYJPT">
+    <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
+    </svg>
+    &nbsp;<span class="astro-BLWJYJPT">java</span>
+  </a>
+</li><li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+  <a href="/tags/代码审计" class="text-sm pr-2 group astro-BLWJYJPT">
+    <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
+    </svg>
+    &nbsp;<span class="astro-BLWJYJPT">代码审计</span>
+  </a>
+</li><li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+  <a href="/tags/反序列化" class="text-sm pr-2 group astro-BLWJYJPT">
+    <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
+    </svg>
+    &nbsp;<span class="astro-BLWJYJPT">反序列化</span>
+  </a>
+</li><li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+  <a href="/tags/commons collections" class="text-sm pr-2 group astro-BLWJYJPT">
+    <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
+    </svg>
+    &nbsp;<span class="astro-BLWJYJPT">commons collections</span>
+  </a>
+</li><li class="inline-block my-1 underline-offset-4 astro-BLWJYJPT">
+  <a href="/tags/函数式编程" class="text-sm pr-2 group astro-BLWJYJPT">
+    <svg xmlns="http://www.w3.org/2000/svg" class=" scale-75 astro-BLWJYJPT"><path d="M16.018 3.815 15.232 8h-4.966l.716-3.815-1.964-.37L8.232 8H4v2h3.857l-.751 4H3v2h3.731l-.714 3.805 1.965.369L8.766 16h4.966l-.714 3.805 1.965.369.783-4.174H20v-2h-3.859l.751-4H21V8h-3.733l.716-3.815-1.965-.37zM14.106 14H9.141l.751-4h4.966l-.752 4z" class="astro-BLWJYJPT"></path>
+    </svg>
+    &nbsp;<span class="astro-BLWJYJPT">函数式编程</span>
+  </a>
+</li>
+      </ul>
+
+      <div class="giscus-wrapper mx-auto max-w-3xl mt-12 astro-VJ4TPSPI">
+        <script src="https://giscus.app/client.js" data-repo="shanz0ng/shanz0ng.github.io" data-repo-id="R_kgDOS8UiLQ" data-category="General" data-category-id="DIC_kwDOS8UiLc4C_Q2i" data-mapping="pathname" data-strict="0" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="zh-CN" crossorigin="anonymous" async>
+        </script>
+      </div>
+    </main>
+
+    <aside id="toc-sidebar" class="toc-sidebar astro-VJ4TPSPI">
+      <div class="toc-sticky astro-VJ4TPSPI">
+        <h3 class="toc-title astro-VJ4TPSPI">目录</h3>
+        <nav id="toc-nav" class="astro-VJ4TPSPI">
+          <ul id="toc-list" class="toc-list astro-VJ4TPSPI"></ul>
+        </nav>
+      </div>
+    </aside>
+  </div>
+  <footer class="mt-auto astro-SZ7XMLTE">
+  <div class="max-w-3xl mx-auto px-0">
+  <hr class="border-skin-line" aria-hidden="true">
+</div>
+  <div class="footer-wrapper astro-SZ7XMLTE">
+    <div class="social-icons flex astro-UPU6FZXR">
+  <a type="button" href="https://github.com/shanz0ng" tabindex="0" class="group link-button astro-UPU6FZXR astro-5EUNQZKT" title="山宗的blog on Github">
+  
+        <svg
+    xmlns="http://www.w3.org/2000/svg"
+    class="icon-tabler"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+    <path
+      d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"
+    ></path>
+  </svg>
+      
+</a>
+</div>
+    <div class="copyright-wrapper astro-SZ7XMLTE">
+      <span class="astro-SZ7XMLTE">Copyright &#169; 2026</span>
+      <span class="separator astro-SZ7XMLTE">&nbsp;|&nbsp;</span>
+      <span class="astro-SZ7XMLTE">All rights reserved.</span>
+    </div>
+  </div>
+</footer>
+
+  </body></html>
+
