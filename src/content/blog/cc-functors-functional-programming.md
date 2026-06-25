@@ -15,10 +15,6 @@ description: "从函数式编程的视角重新审视 Commons Collections 的 fu
 
 # 三块积木，一把枪——CC 组件里的函数式编程
 
----
-
-## 一、背景：2004 年，CC 开发者想在 Java 里实现函数式编程
-
 2000 年代初，Java 没有泛型，没有 lambda，没有 `java.util.function`。而当时 Haskell、Lisp、Erlang、Scala 早已把函数式编程做得很成熟。
 
 CC 设计者用了三年、分两个阶段搭出这套体系：
@@ -99,7 +95,7 @@ echo baidu.com | ./SubFinder/subfinder -silent | ./KsubDomain/ksubdomain -silent
 
 这条命令里藏着函数式编程的三个概念，拆开看——
 
-### 1. 函数是值 `f(x) = c`
+### 2.1 函数是值 `f(x) = c`
 
 把"一个操作"赋给变量、存起来、随时用。
 
@@ -110,13 +106,13 @@ echo baidu.com | ./SubFinder/subfinder -silent | ./KsubDomain/ksubdomain -silent
 F1("baidu.com").transform(null);  // → "baidu.com"
 ```
 
-### 2. 函数可以当参数传 `f(x) = x.m(a)`
+### 2.2 函数可以当参数传 `f(x) = x.m(a)`
 
 把"一个操作"传给另一个方法，让它帮你执行。
 
 `echo` 后面的 `subfinder`、`ksubdomain`、`httprobe`、`httpx`，每个都是一个被传进管道的函数。它不关心数据从哪来，只等待前面的输出进入自己的输入。每个等价于一次 `F2("方法名")`——反射调用，在输入上执行对应方法。
 
-### 3. 函数可以串起来（复合）`f(x) = f₃(f₂(f₁(x)))`
+### 2.3 函数可以串起来（复合）`f(x) = f₃(f₂(f₁(x)))`
 
 前一步的输出 = 后一步的输入，形成流水线。整条管道就是函数复合：
 
@@ -127,7 +123,7 @@ f(baidu.com) = httpx(httprobe(ksubdomain(subfinder(baidu.com))))
 
 管道符隔开的每个命令是一个函数，`ChainedTransformer` 就是 Java 里的管道符。
 
-### CC 用 40+ 个类实现了这套体系
+### 2.4 CC 用 40+ 个类实现了这套体系
 上面三类基础函数是积木，CC 的 functors 包里 40+ 个类都是它们的变体和组合。
 
 ---
@@ -217,13 +213,13 @@ F4().transform(null);  // calc 弹出
 
 ---
 
-## 五、设计深度：TransformedMap 为什么需要 checkSetValue，又为什么调了 transform
+## 五、设计深处的那根引线
 
 上面那条链，是我们自己手动调用 `transform()` 才跑起来的。真正的反序列化攻击需要反序列化过程中自动触发的入口。
 
 `TransformedMap` 恰好提供了这个入口——不是刻意留的后门，它只是在做一件合理的事：**保证所有写入操作都经过转换。**
 
-### TransformedMap 为什么需要 checkSetValue？
+### 5.1 两个写入入口
 
 往 Map 里写值，有两个入口：
 
@@ -246,7 +242,7 @@ public Object setValue(Object value) {
 
 父类定骨架（setValue → checkSetValue → 写入），子类填逻辑——模板方法模式。
 
-### checkSetValue 为什么调了 transform？
+### 5.2 钩子通向链条
 
 `TransformedMap` 继承了这个抽象类，重写了 `checkSetValue`：
 
@@ -258,7 +254,7 @@ protected Object checkSetValue(Object value) {
 
 于是整条链路就连上了：`entry.setValue(x) → checkSetValue(x) → valueTransformer.transform(x)`。链条里配的是什么，调的就是什么。
 
-### 攻击是怎么接上的？
+### 5.3 扳机被扣动时
 
 攻击者只关心一件事：反序列化时，有人替他调了 `entry.setValue()`。
 
@@ -266,7 +262,7 @@ protected Object checkSetValue(Object value) {
 
 CC1 利用的不是 bug，是一个刻意留下的扩展点。`setValue()` 最终会调到 `transform()`，正是因为设计者要求"所有写入都经过转换"——这恰恰是 `TransformedMap` 的正确行为。
 
-### 五个零件，一把枪
+### 5.4 五个零件，一把枪
 
 ```
          ConstantTransformer = 子弹（Runtime.class）
