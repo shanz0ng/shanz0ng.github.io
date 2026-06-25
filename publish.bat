@@ -1,6 +1,10 @@
 @echo off
 cd /d "%~dp0"
 
+:: Proxy for GitHub access
+git config http.proxy http://127.0.0.1:7897
+git config https.proxy http://127.0.0.1:7897
+
 echo ============================================
 echo   Blog Publish Script
 echo ============================================
