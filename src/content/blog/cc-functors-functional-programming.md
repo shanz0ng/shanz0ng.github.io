@@ -13,11 +13,13 @@ tags:
 description: "从函数式编程的视角重新审视 Commons Collections 的 functor 体系：ConstantTransformer、InvokerTransformer、ChainedTransformer 三块积木如何被组合成 CC1 攻击链，以及 TransformedMap.setValue() 为何成为扳机。"
 ---
 
-# 三块积木，一把枪——CC 组件里的函数式编程
 
+## 一、背景：2004 年，CC 开发者想在 Java 里实现函数式编程
 2000 年代初，Java 没有泛型，没有 lambda，没有 `java.util.function`。而当时 Haskell、Lisp、Erlang、Scala 早已把函数式编程做得很成熟。
 
+
 CC 设计者用了三年、分两个阶段搭出这套体系：
+
 
 | 版本 | 年份 | 内容 |
 |------|------|------|
