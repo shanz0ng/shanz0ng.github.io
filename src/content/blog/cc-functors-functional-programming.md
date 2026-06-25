@@ -217,46 +217,38 @@ F4().transform(null);  // calc 弹出
 
 ---
 
-## 五、设计深度：为什么 setValue 会成为扳机
+## 五、设计深度：TransformedMap 为什么需要 checkSetValue，又为什么调了 transform
 
-上面那条链，是我们自己手动调用 `transform()` 才跑起来的。
+上面那条链，是我们自己手动调用 `transform()` 才跑起来的。真正的反序列化攻击需要反序列化过程中自动触发的入口。
 
-但真正的反序列化攻击不能指望手工点火——必须有一个反序列化过程中自动触发的入口，帮你调用到那条链。
+`TransformedMap` 恰好提供了这个入口——不是刻意留的后门，它只是在做一件合理的事：**保证所有写入操作都经过转换。**
 
-到这里只差一个问题：**谁在反序列化时帮你调了 `transform()`？**
+### TransformedMap 为什么需要 checkSetValue？
 
-### Map 的两个写入入口：`put()` 和 `setValue()`
-
-往 Map 里写值，直觉上就是 `map.put(key, value)`。但 Map 还有第二个写入入口：
+往 Map 里写值，有两个入口：
 
 ```java
-map.entrySet().iterator().next().setValue(newValue);
+map.put(key, value);                              // 入口一
+map.entrySet().iterator().next().setValue(x);     // 入口二
 ```
 
-拿到 `Map.Entry` 之后可以直接改值，完全绕过 `put()`。只拦 put 不拦 setValue，就像装了防盗门却没锁窗户——那条转换规则形同虚设。
+只拦 `put()` 不拦 `setValue()`，就像装了防盗门却没锁窗户——那条转换规则形同虚设。
 
-解决办法很直接：`entrySet()` 不返回原始的 Entry，而是包一层带检查逻辑的 Entry 再给你。
-
-核心代码可以浓缩成这样：
+CC 在抽象父类里留了一个钩子 `checkSetValue`：`entrySet()` 返回的 Entry 在写值前，必须先过它。
 
 ```java
+// AbstractInputCheckedMapDecorator 的内部类 MapEntry
 public Object setValue(Object value) {
-    value = parent.checkSetValue(value);
-    return entry.setValue(value);
+    value = parent.checkSetValue(value);  // ← 先过钩子
+    return entry.setValue(value);         // ← 再真正写入
 }
 ```
 
-它的意思非常直接：
+父类定骨架（setValue → checkSetValue → 写入），子类填逻辑——模板方法模式。
 
-1. 先别把新值写回去
-2. 先交给 `parent.checkSetValue(value)` 处理
-3. 处理完，再真正写入底层 Map
+### checkSetValue 为什么调了 transform？
 
-这里的 `parent`，就是外层那个装饰器对象。
-
-### 为什么这一步会连到 `transform()`？
-
-因为在 `TransformedMap` 里，`checkSetValue()` 被重写成了下面这样：
+`TransformedMap` 继承了这个抽象类，重写了 `checkSetValue`：
 
 ```java
 protected Object checkSetValue(Object value) {
@@ -264,51 +256,17 @@ protected Object checkSetValue(Object value) {
 }
 ```
 
-于是，整条路径就通了：
+于是通路焊死：`entry.setValue(x) → checkSetValue(x) → valueTransformer.transform(x)`。管道里配的是什么，调的就是什么。
 
-```text
-entry.setValue(x)
-   ↓
-checkSetValue(x)
-   ↓
-valueTransformer.transform(x)
-```
+### 攻击是怎么接上的？
 
-看到这里，标题里的问题就有答案了：
+攻击者只关心一件事：反序列化时，有人替他调了 `entry.setValue()`。
 
-> **`setValue()` 会成为扳机，不是因为它特殊，而是因为 `TransformedMap` 必须保证连这条写入路径也会触发转换。**
+而 `AnnotationInvocationHandler.readObject()` 在反序列化时遍历 Map 的 entry，类型不匹配就调用 `entry.setValue()`——链路闭合。
 
-### 这不是 bug，是完整的设计
-
-站在组件作者视角，这套设计完全说得通。
-
-他想解决的是"所有写入操作统一过一遍转换"的问题：  
-
-无论你是 `put()`，还是先拿到 `Entry` 再 `setValue()`，只要你往这个 Map 里写数据，就都应该先过一遍转换逻辑。这样规则才一致。
-
-从这个角度看，`TransformedMap` 不是写错了，只是考虑得比较全面。
-
-如果愿意套设计模式的术语，这里其实就是模板方法模式：
-
-- 父类规定流程：`setValue()` → `checkSetValue()` → 真正写入
-- 子类决定细节：`checkSetValue()` 到底做什么
-- `TransformedMap` 给出的具体答案是：调用 `Transformer`
-
-### 这和攻击是怎么接上的？
-
-攻击者关心的不是"这个设计优不优雅"，而是另一件事：
-
-> 只要反序列化过程中，有人替我调用了 `entry.setValue()`，就等于替我触发了 `transform()`。
-
-
-而 `AnnotationInvocationHandler.readObject()` 恰好会在反序列化时遍历 Map 的 entry，并在类型不匹配时调用 `entry.setValue()`——链路闭合。
-
-CC1 真正微妙的地方在于：它利用的不是一个 bug，而是一个刻意留下的扩展点。`setValue()` 之所以会触发 `transform()`，正是因为设计者想保证"所有写入都经过转换"——这恰恰是 `TransformedMap` 的正确行为。
+CC1 利用的不是 bug，是一个刻意留下的扩展点。`setValue()` 最终会调到 `transform()`，正是因为设计者要求"所有写入都经过转换"——这恰恰是 `TransformedMap` 的正确行为。
 
 ### 五个零件，一把枪
-
-到这里，可以把整条链重新看成一把枪：
-
 
 ```
          ConstantTransformer = 子弹（Runtime.class）
@@ -322,10 +280,10 @@ CC1 真正微妙的地方在于：它利用的不是一个 bug，而是一个刻
           │ 子弹  │
           └──┬───┘
              │  getMethod → invoke → exec
-  ┌──────────┼──────────────────────────┐
+  ┌──────────┼───────────────────────────────┐
   │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │  ← 枪管 (ChainedTransformer)
   │     一节火药       二节火药       三节火药   │
-  └──────────────────────────────┬─────┘
+  └──────────────────────────────┬───────────┘
                                  │
                             ┌────┴────┐
                             │  扳机    │  ← setValue()
@@ -337,11 +295,10 @@ CC1 真正微妙的地方在于：它利用的不是一个 bug，而是一个刻
 ```
 
 每个零件单独拆开，都是再正常不过的设计。组合在一起，就是一把上了膛的枪。
+## 番外：为什么没人用的组件，却这么广泛？
 
-一句话总结这一章：
+一个值得思考的问题：**Java 8 已经在 `java.util.function` 包里提供了完整的函数式编程方案，`InvokerTransformer` 这些类几乎没人用了。可为什么 CC1 链依然能打穿那么多服务器？**
 
-> **`setValue()` 会成为扳机，不是因为它危险，而是因为 `TransformedMap` 必须保证连这条写入路径也会触发转换；攻击链利用的，正是这种"设计上必须成立"的一致性。**
-每个零件单独拆开，都是再正常不过的设计。组合在一起，就是一把上了膛的枪。
 答案不在 CC 的 functor 包，在 CC 的其他 240 个类。
 
 ### CC 有 273 个类，functor 只有 40 多个
