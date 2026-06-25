@@ -1,5 +1,5 @@
 ---
-pubDatetime: 2026-06-24
+pubDatetime: 2026-06-25
 title: "三块积木，一把枪——CC 组件里的函数式编程"
 postSlug: cc-functors-functional-programming
 featured: false
