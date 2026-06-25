@@ -232,7 +232,7 @@ map.put(key, value);                              // 入口一
 map.entrySet().iterator().next().setValue(x);     // 入口二
 ```
 
-只拦 `put()` 不拦 `setValue()`，就像装了防盗门却没锁窗户——那条转换规则形同虚设。
+只拦 `put()` 不拦 `setValue()`——防了正面，漏了侧面。
 
 CC 在抽象父类里留了一个钩子 `checkSetValue`：`entrySet()` 返回的 Entry 在写值前，必须先过它。
 
@@ -256,7 +256,7 @@ protected Object checkSetValue(Object value) {
 }
 ```
 
-于是通路焊死：`entry.setValue(x) → checkSetValue(x) → valueTransformer.transform(x)`。管道里配的是什么，调的就是什么。
+于是整条链路就连上了：`entry.setValue(x) → checkSetValue(x) → valueTransformer.transform(x)`。链条里配的是什么，调的就是什么。
 
 ### 攻击是怎么接上的？
 
