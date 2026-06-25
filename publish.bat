@@ -10,6 +10,26 @@ echo   Blog Publish Script
 echo ============================================
 echo.
 
+:: Check for unpushed commits first
+git log origin/main..HEAD --oneline >nul 2>&1
+if %errorlevel% equ 0 (
+    for /f %%i in ('git log origin/main..HEAD --oneline ^| find /c /v ""') do set UNPUSHED=%%i
+) else (
+    set UNPUSHED=0
+)
+if %UNPUSHED% gtr 0 (
+    echo [WARN] Found %UNPUSHED% unpushed commit(s). Trying to push first...
+    git push origin main
+    if %errorlevel% neq 0 (
+        echo [ERROR] Push failed. Run this script again when network is ready.
+        pause
+        exit /b 1
+    )
+    echo        Previous commits pushed OK
+    echo.
+)
+
+:: Check for new changes
 git diff --quiet && git diff --cached --quiet
 if %errorlevel% equ 0 (
     echo [INFO] No changes detected, nothing to publish.
@@ -40,10 +60,14 @@ if %errorlevel% neq 0 (
 echo        Commit OK
 echo.
 
+:push_retry
 echo [3/3] Pushing to GitHub...
 git push origin main
 if %errorlevel% neq 0 (
-    echo [ERROR] Push failed. Check network.
+    echo [ERROR] Push failed.
+    echo Commit is saved locally. When network recovers:
+    echo   git push origin main
+    echo Or just run this script again and it will push first.
     pause
     exit /b 1
 )
