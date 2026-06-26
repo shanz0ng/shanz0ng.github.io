@@ -13,6 +13,7 @@ export interface Props {
 const { post } = Astro.props;
 
 const { title, author, description, ogImage, pubDatetime, tags } = post.data;
+const slug = post.slug;
 
 const { Content } = await post.render();
 
@@ -46,18 +47,8 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
         {tags.map(tag => <Tag name={tag} />)}
       </ul>
 
-      <div class="busuanzi-wrapper mx-auto max-w-3xl mt-8 text-sm opacity-70">
-        <span id="busuanzi_container_page_pv">
-          阅读 <span id="busuanzi_value_page_pv"></span>
-        </span>
-        <span class="mx-2">|</span>
-        <span id="busuanzi_container_site_pv">
-          本站总访问 <span id="busuanzi_value_site_pv"></span>
-        </span>
-        <span class="mx-2">|</span>
-        <span id="busuanzi_container_site_uv">
-          访客 <span id="busuanzi_value_site_uv"></span>
-        </span>
+      <div class="mx-auto max-w-3xl mt-8 text-sm opacity-70">
+        <span id="view-count">阅读 ...</span>
       </div>
 
       <div class="giscus-wrapper mx-auto max-w-3xl mt-12">
@@ -212,4 +203,22 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
 
   buildTOC();
   window.addEventListener("scroll", highlightTOC, { passive: true });
+</script>
+
+<script type="module">
+  import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+  const supabase = createClient(
+    "https://amcbgpyzytudmrlhbfvs.supabase.co",
+    "sb_publishable_bLUM8CSIjC2Pc0C26bytyQ_jTpnfe1S"
+  );
+
+  const slug = "{slug}";
+
+  const { data } = await supabase
+    .rpc("increment_view", { page_slug: slug });
+
+  const count = data ?? 1;
+  const el = document.getElementById("view-count");
+  if (el) el.textContent = `阅读 ${count}`;
 </script>
