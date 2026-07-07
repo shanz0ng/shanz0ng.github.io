@@ -77,7 +77,7 @@ echo        Push OK
 echo.
 
 echo ============================================
-echo   Done! Netlify will deploy in 1-2 min:
-echo   https://shanz0ng-blog.netlify.app/
+echo   Done! GitHub Pages will deploy shortly:
+echo   https://shanz0ng.github.io/
 echo ============================================
 pause

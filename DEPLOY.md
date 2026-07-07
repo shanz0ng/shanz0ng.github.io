@@ -1,64 +1,43 @@
 # 博客部署指南
 
-## 当前部署方式：Netlify
+## 当前部署方式：GitHub Pages
 
-**线上地址：** https://sparkly-chimera-57cc4a.netlify.app/
+**线上地址：** https://shanz0ng.github.io/
+
+本项目是 Astro 静态站点，构建产物输出到 `dist/`。GitHub Pages 通过 GitHub Actions 自动构建并部署，不需要 `docs/` 目录，也不需要额外保留 Netlify 配置。
 
 ### 日常发布流程
 
 写完文章后：
 
 ```bash
-npm run build          # 构建
-git add -A
-git commit -m "xxx"    # 提交
-git push origin main   # 推送
-```
-
-推送后 Netlify 自动检测到变更，自动执行 `npm run build` 并部署。全程约 1-2 分钟。
-
-### Netlify 配置（一次性）
-
-- **Build command:** `npm run build`
-- **Publish directory:** `dist`
-- **Branch:** `main`
-- Netlify 账号：shanz0ng（GitHub 登录），Team: leungerlianger's team
-
----
-
-## 为什么不用 GitHub Pages
-
-GitHub Pages 底层依赖 GitHub Actions。2026 年 6 月 16 日之后，该 repo 的 Actions 引擎出现 `startup_failure`，所有 workflow（包括内置的 pages-build-deployment）全部无法执行。尝试过的方案：
-
-| 方案 | 结果 |
-|------|------|
-| 经典 Pages (main + /docs) | startup_failure |
-| 经典 Pages (main + /root) | startup_failure |
-| GitHub Actions (deploy.yml) | startup_failure |
-| API 触发 Pages build | 永远 building，不完成 |
-| gh-pages 分支 | 构建卡住 |
-| Disable/Enable Actions | 无效 |
-| 删除全部 workflow 重来 | 无效 |
-| 最简单的 echo hello workflow | startup_failure |
-
-**结论：** GitHub Actions 对该 repo 完全不响应，是 GitHub 侧的 bug。
-
----
-
-## 如果将来想切回 GitHub Pages
-
-等 GitHub Actions 修复后，可以做以下任一方案：
-
-### 方案 A：切回 main + /docs
-```bash
 npm run build
-cp -r dist/* docs/
-touch docs/.nojekyll
-git add docs/
-git commit -m "部署至 docs"
-git push
+git add -A
+git commit -m "xxx"
+git push origin main
 ```
-然后在 Settings → Pages 选 main 分支 + /docs 目录。
 
-### 方案 B：用 GitHub Actions
-`.github/workflows/deploy.yml` 已写好，Settings → Pages Source 改 GitHub Actions 即可。
+推送到 `main` 后，GitHub Actions 会自动执行构建并发布到 GitHub Pages。
+
+## 仓库内的部署配置
+
+- 工作流文件：`.github/workflows/deploy.yml`
+- 构建命令：`npm run build`
+- 发布目录：`dist`
+- 站点地址配置：`src/config.ts` 中的 `SITE.website`
+
+## 首次启用时需要检查
+
+在 GitHub 仓库页面确认以下设置：
+
+1. `Settings -> Pages`
+2. `Source` 选择 `GitHub Actions`
+3. 仓库名称保持为 `shanz0ng.github.io`
+
+这个仓库是用户主页仓库，所以站点根路径就是 `/`，当前 Astro 配置不需要额外设置 `base`。
+
+## 本地注意事项
+
+- 不要把 GitHub Token 写进 `git remote` URL
+- 如果网络受限，可以给 Git 配置代理：`http://127.0.0.1:7897`
+- `.netlify/` 只是旧部署残留，本项目现在不再依赖它
