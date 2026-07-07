@@ -218,24 +218,20 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     color: rgb(var(--color-text-base));
     opacity: 0.7;
     text-decoration: none;
-    transition: opacity 0.15s;
+    display: block;
+    padding-left: 0.75rem;
+    border-left: 2px solid transparent;
+    transition: opacity 0.15s, color 0.15s, border-color 0.2s;
   }
   .toc-list a:hover {
     opacity: 1;
     color: rgb(var(--color-accent));
   }
-  .toc-list a {
-    position: relative;
-    padding-left: 0.75rem;
-    border-left: 2px solid transparent;
-    transition: border-color 0.2s, color 0.2s, opacity 0.2s;
-    display: block;
-  }
   .toc-list a.active {
-    opacity: 1;
-    color: rgb(var(--color-accent));
-    font-weight: 500;
-    border-left-color: rgb(var(--color-accent));
+    opacity: 1 !important;
+    color: rgb(var(--color-accent)) !important;
+    font-weight: 600;
+    border-left: 2px solid rgb(var(--color-accent));
   }
   .toc-list .toc-h3 {
     padding-left: 0.75rem;
