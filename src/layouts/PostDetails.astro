@@ -121,11 +121,18 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     display: none;
     width: 14rem;
     flex-shrink: 0;
+    overflow: hidden;
+    transition: width 0.3s ease, opacity 0.3s ease;
   }
   @media (min-width: 1024px) {
     .toc-sidebar {
       display: block;
     }
+  }
+  .toc-sidebar.collapsed {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
   }
   .toc-sticky {
     position: sticky;
@@ -137,6 +144,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0.75rem;
+    white-space: nowrap;
   }
   .toc-title {
     font-size: 0.875rem;
@@ -157,12 +165,6 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   .toc-toggle:hover {
     opacity: 1;
     color: rgb(var(--color-accent));
-  }
-  .toc-sidebar.collapsed .toc-toggle {
-    transform: rotate(180deg);
-  }
-  .toc-sidebar.collapsed #toc-nav {
-    display: none;
   }
   .toc-float-toggle {
     position: fixed;
