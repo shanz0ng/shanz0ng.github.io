@@ -4,6 +4,7 @@ title: “从三块积木到一把枪——CC 组件里的函数式思路”
 postSlug: cc-functors-functional-programming
 featured: false
 draft: false
+ogImage: "/images/cc-functors-functional-programming/og.png"
 tags:
   - Java
   - 代码审计
