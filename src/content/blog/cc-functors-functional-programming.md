@@ -1,6 +1,6 @@
 ---
 pubDatetime: 2026-06-26
-title: "从三块积木到一把枪——CC 组件里的函数式思路"
+title: “从三块积木到一把枪——CC 组件里的函数式思路”
 postSlug: cc-functors-functional-programming
 featured: false
 draft: false
@@ -10,12 +10,12 @@ tags:
   - 反序列化
   - Commons Collections
   - 函数式编程
-description: "拆解 Commons Collections functor 体系的三大核心积木——ConstantTransformer、InvokerTransformer、ChainedTransformer，看它们如何从对象组装变成反序列化攻击链。"
+description: “拆解 Commons Collections functor 体系的三大核心积木，看它们如何从对象组装变成反序列化攻击链。”
 ---
 
 # 从三块积木到一把枪——CC 组件里的函数式思路
 
-前半部分，先拆开看 Commons Collections functor 体系里的三块核心积木：ConstantTransformer、InvokerTransformer 和 ChainedTransformer。看看它们怎样把“先把处理步骤单独抽出来，再按顺序接起来”这类思路翻译成 Java 对象组合。
+前半部分，先拆开看 Commons Collections functor 体系里的三块核心积木：ConstantTransformer、InvokerTransformer 和 ChainedTransformer。看看它们怎样把”先把处理步骤单独抽出来，再按顺序接起来”这类思路翻译成 Java 对象组合。
 
 后半部分，再看这三块积木如何被装进 TransformedMap，又如何在 AnnotationInvocationHandler.readObject() 的参与下接入反序列化流程，最终从“可表达的一条链”变成“一把会响的枪”。
 
@@ -499,6 +499,118 @@ CC1 利用的不是 `AnnotationInvocationHandler` 自己去执行什么危险操
 一句话总结这一章：
 
 > `setValue()` 会成为引线，不是因为它天生危险，而是因为一边要保证“所有写入都经过转换”，另一边要在反序列化时“原地修正当前条目”；攻击链正是借用了这两个正常设计之间的接缝。
+
+### 5.9 再看一眼 LazyMap 版：get() 是怎么把链子带起来的？
+
+LazyMap 版的关键就在 `get()`。
+
+#### 5.9.1 `LazyMap` 想解决什么问题？
+
+普通 `Map.get()` 的语义很简单：有这个 key，就返回对应的 value；没有，就返回 `null`。
+
+而 `LazyMap` 把 `get()` 改成了另一种语义：有这个 key，就正常返回；没有，就先现场生成一个 value，放回 `Map`，再把它返回。
+
+如果借缓存来打比方，这个设计就很好理解了。
+
+比如一张 `Map` 用来缓存网页内容，key 是 URL，value 是页面 HTML。普通 `Map` 在缓存未命中时，只会返回 `null`；而 `LazyMap` 可以把这一步改成：
+
+- 先抓一次这个 URL 的页面
+- 把抓到的 HTML 放回 `Map`
+- 再把结果返回给调用方
+
+如果用代码把这个想法写出来，大概像这样：
+
+```java
+Map<String, String> cache = new HashMap<>();
+
+String getHtml(String url) {
+    String html = cache.get(url);
+    if (html == null) {
+        html = HttpUtil.fetch(url);   // 第一次访问时现场抓取
+        cache.put(url, html);         // 放回缓存
+    }
+    return html;
+}
+```
+
+它把 `get(url)` 从“单纯取值”变成了：
+
+> **取值 + 必要时现场生成 + 回填缓存**
+
+这就是 `LazyMap` 里“懒”的意思：它不会一开始就把所有 value 都准备好，而是等某个 key 第一次被访问时，再去补出这个 value。所以这里的 “lazy”，更接近“延迟计算”或“按需生成”。
+
+#### 5.9.2 这个设计为什么会被 CC1 利用？
+
+问题就出在“现场生成”这一步交给谁来做。
+
+在 `LazyMap` 里，如果某个 key 不存在，就会调用事先传进去的 `Transformer`，用这个 key 生成一个 value。
+
+正常场景下，这本来只是一次很普通的自动补值逻辑；但在 CC1 的 `LazyMap` 版里，攻击者把这里的 `Transformer` 换成了 `ChainedTransformer`。
+
+于是语义就变了：
+
+- 原本是：key 不存在 → 补一个正常值
+- 现在变成：key 不存在 → 触发一条 transformer 链
+
+所以这里要盯住的，就是这一下：
+
+```text
+map.get(key)
+```
+
+只要调用最终落到 `LazyMap.get(...)`，并且这个 key 原本不存在，后面的 `transform()` 就会被带起来。
+
+那 CC1 的 `LazyMap` 版，是谁替攻击者调用了这一下 `get()`？
+
+答案不是 `readObject()` 直接去调了 `LazyMap.get()`，而是中间多了一层**动态代理**。
+
+构造过程可以先压成这几步：
+
+```java
+Map lazyMap = LazyMap.decorate(innerMap, chainedTransformer);
+InvocationHandler innerHandler =
+    new AnnotationInvocationHandler(Override.class, lazyMap);
+Map proxyMap = (Map) Proxy.newProxyInstance(
+    Map.class.getClassLoader(),
+    new Class[]{Map.class},
+    innerHandler
+);
+Object outerHandler =
+    new AnnotationInvocationHandler(Override.class, proxyMap);
+```
+
+
+这里有两个 `AnnotationInvocationHandler`：
+
+- **内层 `AnnotationInvocationHandler`**：包着 `LazyMap`，负责接住代理对象的方法调用
+- **外层 `AnnotationInvocationHandler`**：包着 `proxyMap`，负责在反序列化时进入 `readObject()`
+
+这里的 `proxyMap`，不是普通 `Map`，而是 JDK 动态代理生成出来的对象。
+
+`new Class[]{Map.class}` 指定：这个代理对象要表现得像一个 `Map`；`innerHandler` 指定：以后谁调用这个 `Map` 的方法，都先交给 `innerHandler.invoke(...)`。
+
+动态代理把这次 `proxyMap.entrySet()` 调用转发到了内层 `AnnotationInvocationHandler.invoke()`。
+
+链路可以压成这样：
+
+```text
+outer AnnotationInvocationHandler.readObject()
+ -> outer.memberValues.entrySet()          // 这里的 memberValues = proxyMap
+ -> proxyMap.entrySet()
+ -> inner AnnotationInvocationHandler.invoke()
+ -> inner.memberValues.get("entrySet")     // 这里的 memberValues = LazyMap
+ -> LazyMap.get("entrySet")
+ -> ChainedTransformer.transform("entrySet")
+```
+
+进入 `invoke()` 之后，它会取出这次调用的方法名，也就是 `"entrySet"`，再拿这个名字去内部那张表里查值：
+
+```text
+memberValues.get("entrySet")
+```
+
+而这张表，恰好就是攻击者提前布置好的 `LazyMap`。因为 `LazyMap` 里原本并没有 `"entrySet"` 这个 key，所以 `get("entrySet")` 会走进懒加载分支，触发 `ChainedTransformer.transform(...)`。
+
 ## 番外：为什么 CC 组件的使用这么广泛？
 
 一个值得思考的问题：**Java 8 已经在 `java.util.function` 包里提供了完整的函数式编程方案，`InvokerTransformer` 这些类几乎没人用了。可为什么 CC1 链依然还会在这么多服务器上出现利用条件？**
@@ -600,6 +712,18 @@ public class InvokerTransformer<I, O> implements Transformer<I, O> {
 | JDK | 1.8.0_60 |
 | Commons Collections | 3.2.1 |
 | 关键依赖位置 | `org.apache.commons.collections.functors` |
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
