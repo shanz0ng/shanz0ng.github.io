@@ -392,18 +392,20 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       if (!id || id === activeId) return;
       activeId = id;
 
+      document.querySelectorAll("#toc-list li.active-parent").forEach(item => {
+        item.classList.remove("active-parent");
+      });
+
       links.forEach(link => {
         const isActive = link.getAttribute("href") === `#${id}`;
         link.classList.toggle("active", isActive);
-        link.parentElement?.classList.toggle("active-parent", isActive);
-        link.closest("li")?.classList.toggle("active-parent", isActive);
-
-        const parentListItem = link.parentElement?.parentElement?.closest("li");
-        if (parentListItem) {
-          parentListItem.classList.toggle("active-parent", isActive);
-        }
 
         if (isActive) {
+          let node = link.closest("li");
+          while (node) {
+            node.classList.add("active-parent");
+            node = node.parentElement?.closest("li");
+          }
           link.scrollIntoView({ block: "nearest" });
         }
       });
