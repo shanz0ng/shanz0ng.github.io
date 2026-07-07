@@ -71,24 +71,25 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     </main>
 
     <aside id="toc-sidebar" class="toc-sidebar">
+      <div class="toc-header">
+        <span class="toc-title">目录</span>
+        <button id="toc-close" class="toc-close" title="隐藏目录">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path fill-rule="evenodd" d="M11.854 4.146a.5.5 0 0 1 0 .708L8.707 8l3.147 3.146a.5.5 0 0 1-.708.708L8 8.707l-3.146 3.147a.5.5 0 0 1-.708-.708L7.293 8 4.146 4.854a.5.5 0 1 1 .708-.708L8 7.293l3.146-3.147a.5.5 0 0 1 .708 0z"/>
+          </svg>
+        </button>
+      </div>
       <div class="toc-sticky">
-        <div class="toc-header">
-          <h3 class="toc-title">目录</h3>
-          <button id="toc-toggle" class="toc-toggle" title="隐藏/显示目录">
-            <svg id="toc-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path fill-rule="evenodd" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 1.06-1.06L8 11.69l4.47-4.47a.75.75 0 1 1 1.06 1.06l-5.25 5.25Z"/>
-            </svg>
-          </button>
-        </div>
         <nav id="toc-nav">
           <ul id="toc-list" class="toc-list"></ul>
         </nav>
       </div>
     </aside>
-    <button id="toc-float-toggle" class="toc-float-toggle hidden" title="显示目录">
-      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11Zm0 5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11Zm0 5a.5.5 0 0 1 0-1h6a.5.5 0 0 1 0 1h-6Z"/>
+    <button id="toc-tab" class="toc-tab hidden" title="显示目录">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
       </svg>
+      <span class="toc-tab-label">目录</span>
     </button>
   </div>
   <Footer />
@@ -116,80 +117,92 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     margin: 2rem 0;
   }
 
-  /* TOC Sidebar */
+  /* TOC Sidebar — fixed right, slide in/out */
   .toc-sidebar {
-    display: none;
-    width: 14rem;
-    flex-shrink: 0;
-    overflow: hidden;
-    transition: width 0.3s ease, opacity 0.3s ease;
-  }
-  @media (min-width: 1024px) {
-    .toc-sidebar {
-      display: block;
-    }
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 16rem;
+    height: 100vh;
+    z-index: 60;
+    background: rgb(var(--color-bg));
+    border-left: 1px solid rgb(var(--color-text-base) / 0.15);
+    transform: translateX(0);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
   }
   .toc-sidebar.collapsed {
-    width: 0;
-    opacity: 0;
-    pointer-events: none;
+    transform: translateX(100%);
   }
   .toc-sticky {
-    position: sticky;
-    top: 6rem;
-    padding-top: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 0.5rem;
   }
   .toc-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.75rem;
-    white-space: nowrap;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgb(var(--color-text-base) / 0.1);
   }
   .toc-title {
-    font-size: 0.875rem;
+    font-size: 0.95rem;
     font-weight: 600;
     color: rgb(var(--color-accent));
-    margin-bottom: 0;
   }
-  .toc-toggle {
+  .toc-close {
     background: none;
     border: none;
     cursor: pointer;
     color: rgb(var(--color-text-base));
-    opacity: 0.5;
-    padding: 2px;
+    opacity: 0.4;
+    padding: 4px;
     border-radius: 4px;
-    transition: opacity 0.15s, transform 0.3s;
+    transition: opacity 0.15s;
   }
-  .toc-toggle:hover {
+  .toc-close:hover {
     opacity: 1;
     color: rgb(var(--color-accent));
   }
-  .toc-float-toggle {
+
+  /* Toggle tab — always visible at right edge */
+  .toc-tab {
     position: fixed;
-    right: 1rem;
-    bottom: 5rem;
-    z-index: 50;
-    background: rgb(var(--color-accent));
-    color: rgb(var(--color-bg));
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 59;
+    background: rgb(var(--color-bg));
+    border: 1px solid rgb(var(--color-text-base) / 0.15);
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    padding: 0.75rem 0.5rem;
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    opacity: 0.85;
-    transition: opacity 0.2s;
+    gap: 0.25rem;
+    color: rgb(var(--color-text-base));
+    opacity: 0.6;
+    transition: opacity 0.15s, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -1px 0 4px rgba(0,0,0,0.08);
   }
-  .toc-float-toggle:hover {
+  .toc-tab:hover {
     opacity: 1;
+    color: rgb(var(--color-accent));
   }
-  .toc-float-toggle.hidden {
-    display: none;
+  .toc-tab.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .toc-tab-label {
+    writing-mode: vertical-lr;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
   }
   .toc-list {
     list-style: none;
@@ -269,30 +282,31 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   buildTOC();
   window.addEventListener("scroll", highlightTOC, { passive: true });
 
-  // TOC toggle
+  // TOC toggle — slide from right
   const sidebar = document.getElementById("toc-sidebar");
-  const toggleBtn = document.getElementById("toc-toggle");
-  const floatBtn = document.getElementById("toc-float-toggle");
+  const closeBtn = document.getElementById("toc-close");
+  const tabBtn = document.getElementById("toc-tab");
 
-  if (sidebar && toggleBtn && floatBtn) {
+  if (sidebar && closeBtn && tabBtn) {
     const KEY = "toc-collapsed";
 
-    function collapse() {
-      sidebar.classList.add("collapsed");
-      floatBtn.classList.remove("hidden");
-      localStorage.setItem(KEY, "1");
-    }
-    function expand() {
+    function show() {
       sidebar.classList.remove("collapsed");
-      floatBtn.classList.add("hidden");
+      tabBtn.classList.add("hidden");
       localStorage.setItem(KEY, "0");
     }
-    toggleBtn.addEventListener("click", () => {
-      sidebar.classList.contains("collapsed") ? expand() : collapse();
-    });
-    floatBtn.addEventListener("click", expand);
+    function hide() {
+      sidebar.classList.add("collapsed");
+      tabBtn.classList.remove("hidden");
+      localStorage.setItem(KEY, "1");
+    }
+    closeBtn.addEventListener("click", hide);
+    tabBtn.addEventListener("click", show);
 
-    if (localStorage.getItem(KEY) === "1") collapse();
+    if (localStorage.getItem(KEY) === "1") {
+      sidebar.classList.add("collapsed");
+      tabBtn.classList.remove("hidden");
+    }
   }
 </script>
 
