@@ -1,7 +1,9 @@
 import type { Site, SocialObjects } from "./types";
 
+const website = process.env.SITE_URL?.trim() || "https://shanz0ng.github.io";
+
 export const SITE: Site = {
-  website: "https://shanz0ng.github.io",
+  website,
   author: "山宗",
   desc: "Blog",
   title: "山宗的blog",

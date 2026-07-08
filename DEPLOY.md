@@ -1,43 +1,48 @@
 # 博客部署指南
 
-## 当前部署方式：GitHub Pages
+## 当前部署方式：Cloudflare Pages
 
-**线上地址：** https://shanz0ng.github.io/
+本项目是 Astro 静态站点，Cloudflare Pages 直接从 GitHub 源码仓库拉取并构建，不再依赖 GitHub Pages，也不需要同步 `docs/`。
 
-本项目是 Astro 静态站点，构建产物输出到 `dist/`。GitHub Pages 通过 GitHub Actions 自动构建并部署，不需要 `docs/` 目录，也不需要额外保留 Netlify 配置。
+## Cloudflare Pages 配置
 
-### 日常发布流程
+在 Cloudflare Pages 创建项目时使用：
 
-写完文章后：
+- Framework preset: `Astro`
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: `/`
+- Production branch: `main`
 
-```bash
-npm run build
-git add -A
-git commit -m "xxx"
-git push origin main
-```
+## 必配环境变量
 
-推送到 `main` 后，GitHub Actions 会自动执行构建并发布到 GitHub Pages。
+在 Cloudflare Pages 的 `Settings -> Environment variables` 里设置：
 
-## 仓库内的部署配置
+- `SITE_URL`
 
-- 工作流文件：`.github/workflows/deploy.yml`
-- 构建命令：`npm run build`
-- 发布目录：`dist`
-- 站点地址配置：`src/config.ts` 中的 `SITE.website`
+值填写你的最终站点地址，例如：
 
-## 首次启用时需要检查
+- `https://your-project.pages.dev`
+- `https://blog.example.com`
 
-在 GitHub 仓库页面确认以下设置：
+`src/config.ts` 会优先读取这个变量，用它生成 canonical、sitemap 和 RSS 链接。
 
-1. `Settings -> Pages`
-2. `Source` 选择 `GitHub Actions`
-3. 仓库名称保持为 `shanz0ng.github.io`
+## 日常发布流程
 
-这个仓库是用户主页仓库，所以站点根路径就是 `/`，当前 Astro 配置不需要额外设置 `base`。
+写完文章后直接双击 `publish.bat`，脚本会自动：
+
+1. 本地构建
+2. 提交源码
+3. 推送到 GitHub
+
+推送到 `main` 后，Cloudflare Pages 会自动拉取最新提交并部署。
+
+## 自定义域名
+
+后续如果要绑定自己的域名，在 Cloudflare Pages 后台添加域名后，把 `SITE_URL` 改成最终域名即可。
 
 ## 本地注意事项
 
 - 不要把 GitHub Token 写进 `git remote` URL
 - 如果网络受限，可以给 Git 配置代理：`http://127.0.0.1:7897`
-- `.netlify/` 只是旧部署残留，本项目现在不再依赖它
+- `docs/` 和仓库根目录里的静态文件是历史遗留，不再作为正式发布源

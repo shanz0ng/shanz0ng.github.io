@@ -32,7 +32,7 @@ if "%HAS_CHANGES%"=="0" if "%HAS_UNPUSHED%"=="0" (
 )
 
 if "%HAS_CHANGES%"=="1" (
-    echo [1/4] Building locally...
+    echo [1/3] Building locally...
     call npm run build
     if errorlevel 1 (
         echo [ERROR] Build failed.
@@ -42,22 +42,7 @@ if "%HAS_CHANGES%"=="1" (
     echo        Build OK
     echo.
 
-    echo [2/4] Syncing dist to docs...
-    powershell -NoProfile -Command ^
-        "$ErrorActionPreference = 'Stop';" ^
-        "if (-not (Test-Path 'docs')) { New-Item -ItemType Directory -Path 'docs' | Out-Null };" ^
-        "Get-ChildItem -LiteralPath 'docs' -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force;" ^
-        "Copy-Item -Path 'dist\\*' -Destination 'docs' -Recurse -Force;" ^
-        "New-Item -ItemType File -Path 'docs\\.nojekyll' -Force | Out-Null"
-    if errorlevel 1 (
-        echo [ERROR] Failed to sync dist to docs.
-        pause
-        exit /b 1
-    )
-    echo        Sync OK
-    echo.
-
-    echo [3/4] Committing...
+    echo [2/3] Committing...
     git add -A
     git diff --cached --quiet
     if errorlevel 1 (
@@ -75,11 +60,11 @@ if "%HAS_CHANGES%"=="1" (
         echo.
     )
 ) else (
-    echo [1/4] No local changes, only pushing existing commits...
+    echo [1/3] No local changes, only pushing existing commits...
     echo.
 )
 
-echo [4/4] Pushing to GitHub...
+echo [3/3] Pushing to GitHub...
 call :push_main
 if errorlevel 1 (
     echo [ERROR] Push failed.
@@ -91,8 +76,8 @@ echo        Push OK
 echo.
 
 echo ============================================
-echo   Done! GitHub Pages will deploy shortly:
-echo   https://shanz0ng.github.io/
+echo   Done! Cloudflare Pages will deploy after Git push.
+echo   Set SITE_URL in Cloudflare Pages to your pages.dev or custom domain.
 echo ============================================
 pause
 exit /b 0
