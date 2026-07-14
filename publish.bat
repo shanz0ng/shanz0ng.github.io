@@ -3,7 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
 echo ============================================
-echo   Blog Auto Publish Script
+echo   Blog Publish Script - GitHub Pages
 echo ============================================
 echo.
 
@@ -32,7 +32,7 @@ if "%HAS_CHANGES%"=="0" if "%HAS_UNPUSHED%"=="0" (
 )
 
 if "%HAS_CHANGES%"=="1" (
-    echo [1/3] Building locally...
+    echo [1/4] Building locally...
     call npm run build
     if errorlevel 1 (
         echo [ERROR] Build failed.
@@ -42,7 +42,15 @@ if "%HAS_CHANGES%"=="1" (
     echo        Build OK
     echo.
 
-    echo [2/3] Committing...
+    echo [2/4] Syncing dist to docs for GitHub Pages...
+    if exist docs rmdir /s /q docs
+    mkdir docs
+    xcopy dist docs /E /I /Y >nul
+    type nul > docs\.nojekyll
+    echo        docs OK
+    echo.
+
+    echo [3/4] Committing...
     git add -A
     git diff --cached --quiet
     if errorlevel 1 (
@@ -60,11 +68,11 @@ if "%HAS_CHANGES%"=="1" (
         echo.
     )
 ) else (
-    echo [1/3] No local changes, only pushing existing commits...
+    echo [1/4] No local changes, only pushing existing commits...
     echo.
 )
 
-echo [3/3] Pushing to GitHub...
+echo [4/4] Pushing to GitHub...
 call :push_main
 if errorlevel 1 (
     echo [ERROR] Push failed.
@@ -76,8 +84,8 @@ echo        Push OK
 echo.
 
 echo ============================================
-echo   Done! Cloudflare Pages will deploy after Git push.
-echo   Set SITE_URL in Cloudflare Pages to your pages.dev or custom domain.
+echo   Done! GitHub Pages will deploy in 1-2 min:
+echo   https://shanz0ng.github.io/
 echo ============================================
 pause
 exit /b 0

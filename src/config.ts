@@ -1,4 +1,4 @@
-import type { Site, SocialObjects } from "./types";
+﻿import type { Site, SocialObjects } from "./types";
 
 const website = process.env.SITE_URL?.trim() || "https://shanz0ng.github.io";
 
@@ -23,7 +23,7 @@ export const SOCIALS: SocialObjects = [
   {
     name: "Github",
     href: "https://github.com/shanz0ng",
-    linkTitle: `山宗的blog on Github`,
+    linkTitle: `${SITE.title} on Github`,
     active: true,
   },
   {
@@ -141,3 +141,4 @@ export const SOCIALS: SocialObjects = [
     active: false,
   },
 ];
+
