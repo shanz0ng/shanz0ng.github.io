@@ -10,7 +10,7 @@
 - Branch: `main`
 - Folder: `/docs`
 
-仓库也包含 `.github/workflows/deploy.yml`，如果 GitHub Pages 的 Source 改成 `GitHub Actions`，该 workflow 会直接构建 `dist` 并部署。
+当前不使用自定义 GitHub Actions workflow。GitHub Pages 直接从 `main / docs` 发布。
 
 ## 日常发布
 
@@ -32,3 +32,4 @@
 - 文章源码放在 `src/content/blog/`
 - 不要手动编辑 `docs/`，它是构建产物
 - 如果 GitHub 直连失败，`publish.bat` 会自动尝试 `http://127.0.0.1:7897` 代理
+
