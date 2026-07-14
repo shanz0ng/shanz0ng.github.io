@@ -32,6 +32,15 @@ if "%HAS_CHANGES%"=="0" if "%HAS_UNPUSHED%"=="0" (
 )
 
 if "%HAS_CHANGES%"=="1" (
+    echo [0/4] Checking blog frontmatter...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$bad = New-Object System.Collections.Generic.List[string]; foreach ($f in Get-ChildItem -LiteralPath 'src/content/blog' -Filter '*.md') { $first = Get-Content -LiteralPath $f.FullName -TotalCount 1 -Encoding UTF8; if ($first -ne '---') { [void]$bad.Add($f.Name) } }; if ($bad.Count -gt 0) { Write-Host '[ERROR] Markdown files must start with --- frontmatter:'; foreach ($name in $bad) { Write-Host ('  ' + $name) }; exit 1 }"
+    if errorlevel 1 (
+        echo [ERROR] Fix the markdown frontmatter before publishing.
+        pause
+        exit /b 1
+    )
+    echo        Frontmatter OK
+    echo.
     echo [1/4] Building locally...
     call npm run build
     if errorlevel 1 (
@@ -102,3 +111,4 @@ set "PUSH_RESULT=%errorlevel%"
 git config --unset http.proxy >nul 2>&1
 git config --unset https.proxy >nul 2>&1
 exit /b %PUSH_RESULT%
+
