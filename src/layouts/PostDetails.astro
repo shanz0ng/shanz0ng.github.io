@@ -134,8 +134,10 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     position: fixed;
     top: 0;
     right: 0;
-    width: 16rem;
+    width: clamp(18rem, 24vw, 20rem);
+    max-width: calc(100vw - 1.5rem);
     height: 100vh;
+    box-sizing: border-box;
     z-index: 60;
     background: rgb(var(--color-bg));
     border-left: 1px solid rgb(var(--color-text-base) / 0.15);
@@ -151,6 +153,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   .toc-sticky {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding-top: 0.5rem;
   }
   .toc-progress {
@@ -263,9 +266,11 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   }
   .toc-list {
     list-style: decimal;
+    list-style-position: outside;
     padding-left: 1.15rem;
     margin: 0;
     font-size: 0.875rem;
+    overflow-wrap: anywhere;
   }
   .toc-list :global(li) {
     margin: 0.2rem 0;
@@ -273,7 +278,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   }
   .toc-list :global(ol) {
     margin: 0.25rem 0 0.3rem;
-    padding-left: 1.15rem;
+    padding-left: 1rem;
   }
   .toc-list :global(a) {
     color: rgb(var(--color-text-base));
@@ -281,15 +286,19 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     text-decoration: none;
     display: block;
     position: relative;
+    min-width: 0;
     padding: 0.34rem 0.55rem 0.34rem 0.85rem;
     border-left: 3px solid transparent;
     border-radius: 0 0.5rem 0.5rem 0;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     transition:
       opacity 0.15s,
       color 0.15s,
       border-color 0.2s,
-      background-color 0.2s,
-      transform 0.2s;
+      background-color 0.2s;
   }
   .toc-list :global(a:hover) {
     opacity: 1;
@@ -310,7 +319,6 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       rgba(var(--color-accent), 0.16),
       rgba(var(--color-accent), 0.06)
     );
-    transform: translateX(2px);
   }
   .toc-list :global(a.active::before) {
     content: "";
@@ -336,7 +344,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
 
   @media (max-width: 1279px) {
     .toc-sidebar {
-      width: 14rem;
+      width: 17rem;
     }
   }
 
@@ -346,7 +354,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       max-width: 48rem;
     }
     .toc-sidebar {
-      width: 13rem;
+      width: 16rem;
       padding: 1rem;
     }
   }
