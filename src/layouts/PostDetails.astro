@@ -48,9 +48,9 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       </ul>
 
       <div class="mx-auto mt-8 max-w-3xl text-sm opacity-70">
-        <span id="view-count" class="view-count-loading">闃呰缁熻涓?..</span>
+        <span id="view-count" class="view-count-loading">阅读统计中...</span>
         <span id="busuanzi_container_page_pv" style="display:none">
-          闃呰 <span id="busuanzi_value_page_pv"></span>
+          阅读 <span id="busuanzi_value_page_pv"></span>
         </span>
       </div>
 
@@ -75,8 +75,8 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
 
     <aside id="toc-sidebar" class="toc-sidebar">
       <div class="toc-header">
-        <span class="toc-title">鐩綍</span>
-        <button id="toc-close" class="toc-close" title="闅愯棌鐩綍">
+        <span class="toc-title">目录</span>
+        <button id="toc-close" class="toc-close" title="隐藏目录">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path fill-rule="evenodd" d="M11.854 4.146a.5.5 0 0 1 0 .708L8.707 8l3.147 3.146a.5.5 0 0 1-.708.708L8 8.707l-3.146 3.147a.5.5 0 0 1-.708-.708L7.293 8 4.146 4.854a.5.5 0 1 1 .708-.708L8 7.293l3.146-3.147a.5.5 0 0 1 .708 0z"/>
           </svg>
@@ -84,7 +84,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       </div>
       <div class="toc-progress">
         <div class="toc-progress-meta">
-          <span class="toc-progress-label">宸茶</span>
+          <span class="toc-progress-label">已读</span>
           <span id="toc-progress-value" class="toc-progress-value">0%</span>
         </div>
         <div class="toc-progress-track" aria-hidden="true">
@@ -97,11 +97,11 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
         </nav>
       </div>
     </aside>
-    <button id="toc-tab" class="toc-tab hidden" title="鏄剧ず鐩綍">
+    <button id="toc-tab" class="toc-tab hidden" title="显示目录">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
       </svg>
-      <span class="toc-tab-label">鐩綍</span>
+      <span class="toc-tab-label">目录</span>
     </button>
   </div>
   <Footer />
@@ -528,10 +528,11 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
 
     if (attempts >= 20) {
       if (el) {
-        el.textContent = "闃呰缁熻鏆備笉鍙敤";
+        el.textContent = "阅读统计暂不可用";
       }
       window.clearInterval(timer);
     }
   }, 500);
 </script>
+
 

@@ -40,7 +40,7 @@
 <link rel="stylesheet" href="/assets-built/_slug_.77c27b8f.css" />
 <link rel="stylesheet" href="/assets-built/_slug_.8f5bd007.css" />
 <link rel="stylesheet" href="/assets-built/_slug_.00dd9261.css" />
-<link rel="stylesheet" href="/assets-built/_slug_.9526a965.css" /><script type="module" src="/assets-built/hoisted.c76ea057.js"></script></head>
+<link rel="stylesheet" href="/assets-built/_slug_.9526a965.css" /><script type="module" src="/assets-built/hoisted.8a2272c8.js"></script></head>
   <body>
     
   <header class="astro-3EF6KSR2">
@@ -123,13 +123,13 @@
 <p>IDEA 配 Remote JVM Debug，Host <code>192.168.220.132</code>，Port <code>8453</code>。WebLogic 源码从 Docker 拉出来挂到 IDEA 里当 Library：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #61AFEF">docker</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">cp</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">cve-2020-14882-weblogic-1:/u01/oracle/wlserver/modules</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">→</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">Windows</span></span>
 <span class="line"><span style="color: #61AFEF">IDEA</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">→</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">Project</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">Structure</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">→</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">Libraries</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">→</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">添加该目录</span></span></code></pre>
-<p><img src="../../images/weblogic-memory-shell/01.png" alt="调试环境总览"></p>
+<p><img src="/images/weblogic-memory-shell/01.png" alt="调试环境总览"></p>
 <p>VM 上同时跑着 tcpdump 抓包：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #61AFEF">sudo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">tcpdump</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-i</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">lo</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-s</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">0</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-w</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">/tmp/debug.pcap</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">port</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">7001</span><span style="color: #ABB2BF"> &#x26;</span></span></code></pre>
 <h3 id="第一步从-http-get-入手追踪协议分发">第一步：从 HTTP GET 入手追踪协议分发</h3>
-<p><img src="../../images/weblogic-memory-shell/02.png" alt="浏览器访问 7001 端口"></p>
+<p><img src="/images/weblogic-memory-shell/02.png" alt="浏览器访问 7001 端口"></p>
 <p>浏览器直接访问 <code>http://192.168.220.132:7001/</code>，走 HTTP。在 <code>MuxableSocketDiscriminator</code> 的分发逻辑下断点，这个 HTTP GET 一过来就命中。</p>
-<p><img src="../../images/weblogic-memory-shell/03.png" alt="isMessageComplete 断点命中"></p>
+<p><img src="/images/weblogic-memory-shell/03.png" alt="isMessageComplete 断点命中"></p>
 <p>断点命中后，IDEA 的 Frames 面板显示完整调用栈，往上翻看到了 <code>isMessageComplete()</code>，里面有完整的协议认领逻辑（代码是基于 IDEA 反编译还原的）：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #C678DD">boolean</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">isMessageComplete</span><span style="color: #E06C75">() {</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">int</span><span style="color: #E06C75"> maxBytesReqd </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #D19A66">0</span><span style="color: #ABB2BF">;</span></span>
@@ -157,30 +157,30 @@
 <p>一是 <code>maxBytesReqd</code>——遍历过程中会收集每个 handler 要求的头长度，如果当前收到的字节还不够，直接返回 false，后面的 handler 根本不会被问到。</p>
 <p>二是循环外还有一个 <code>availBytes &#x3C; maxBytesReqd</code> 的检查——T3 handler 的 <code>getHeaderLength()</code> 返回 19，如果数据不够 19 字节，即使前面的 handler 认领失败，也不会继续往后问。这就是为什么不能随便找个位置加自定义 handler——如果放在 HTTP 后面，T3 已经把 <code>maxBytesReqd</code> 拉到了 19，短包（比如 4 字节的自定义标识 <code>0x33</code> + 命令）根本过不了这个检查。</p>
 <p>停在这一帧，Alt+F8 挖字段。先看 <code>this.head</code>——是个 Chunk 对象，两个关键字段：<code>byte[] buf</code> 和 <code>int end</code>。<code>buf[0]</code> 就是连接首字节。</p>
-<p><img src="../../images/weblogic-memory-shell/04.png" alt="Alt+F8 查看 this.head"></p>
+<p><img src="/images/weblogic-memory-shell/04.png" alt="Alt+F8 查看 this.head"></p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">this.head: weblogic.utils.io.Chunk@4fde08c8</span></span>
 <span class="line"><span style="color: #abb2bf">  end: 435</span></span>
 <span class="line"><span style="color: #abb2bf">  buf[0]: 0x47  →  'G'  (HTTP GET 的首字母)</span></span></code></pre>
 <p>HTTP GET请求首字节 <code>G</code>（0x47），HTTP handler 的 <code>claimSocket</code> 认这个。接着看 <code>this.channels</code>——5 个元素，逐个 Alt+F8：</p>
-<p><img src="../../images/weblogic-memory-shell/05.png" alt="Alt+F8 查看 this.channels"></p>
+<p><img src="/images/weblogic-memory-shell/05.png" alt="Alt+F8 查看 this.channels"></p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">channels[0] → Default[iiop] → handler = ProtocolHandlerIIOP</span></span>
 <span class="line"><span style="color: #abb2bf">channels[1] → Default[t3]   → handler = ProtocolHandlerT3</span></span>
 <span class="line"><span style="color: #abb2bf">channels[2] → Default[ldap] → handler = ProtocolHandlerLDAP</span></span>
 <span class="line"><span style="color: #abb2bf">channels[3] → Default[snmp] → handler = ProtocolHandlerSNMP</span></span>
 <span class="line"><span style="color: #abb2bf">channels[4] → Default[http] → handler = ProtocolHandlerHTTP</span></span></code></pre>
 <p>IIOP 在第一位。如果 IIOP handler 的 <code>claimSocket</code> 认了某个首字节，for 循环直接 break。关键是<strong>IIOP handler 只认自己协议的固定字节头</strong>。如果能把它的行为改成认 <code>0x33</code>的信息头，后续所有以 <code>0x33</code> 开头的连接就全归内存马管。</p>
-<p><img src="../../images/weblogic-memory-shell/06.png" alt="F7 进入 claimSocket 查看匹配逻辑"></p>
+<p><img src="/images/weblogic-memory-shell/06.png" alt="F7 进入 claimSocket 查看匹配逻辑"></p>
 <h3 id="第二步channels-的来源">第二步：channels 的来源</h3>
 <p>确认 <code>channels</code> 是核心之后，要搞清楚它从哪来。把断点从 <code>isMessageComplete()</code> 往前移，打在 <code>MuxableSocketDiscriminator</code> 的构造函数上（<code>this.channels = channels</code> 这个赋值语句）。</p>
-<p><img src="../../images/weblogic-memory-shell/07.png" alt="MuxableSocketDiscriminator 构造函数断点"></p>
+<p><img src="/images/weblogic-memory-shell/07.png" alt="MuxableSocketDiscriminator 构造函数断点"></p>
 <p>重新发包触发后，Frames 面板往上翻，调用来源是：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// weblogic.server.channels.ServerSocketWrapper.createMuxableSocketForRegister()</span></span>
 <span class="line"><span style="color: #E06C75">rs </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">MuxableSocketDiscriminator</span><span style="color: #E06C75">(s</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">this</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">channels</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">;</span></span></code></pre>
-<p><img src="../../images/weblogic-memory-shell/08.png" alt="createMuxableSocketForRegister 源码"></p>
+<p><img src="/images/weblogic-memory-shell/08.png" alt="createMuxableSocketForRegister 源码"></p>
 <p>分发器拿到的 <code>channels</code> 是 <code>ServerSocketWrapper</code> 的同名字段。从构造函数的调用栈继续上溯，看到了 <code>ServerListenThread</code>——一个长生命周期后台线程。每次新连接进来，这个线程调用 <code>createMuxableSocketForRegister()</code>，把 <code>ServerSocketWrapper.channels</code> 传进去。</p>
 <p>所以，如果改了 wrapper 的 <code>channels</code>，后续所有连接都会用改过的版本。</p>
 <h3 id="第三步拿到-serversocketwrapper">第三步：拿到 ServerSocketWrapper</h3>
-<p><img src="../../images/weblogic-memory-shell/09.png" alt="ServerListenThread 断点命中"></p>
+<p><img src="/images/weblogic-memory-shell/09.png" alt="ServerListenThread 断点命中"></p>
 <p><code>ServerListenThread</code> 持有 <code>ServerSocketWrapper</code>，但怎么拿到它？</p>
 <p>先在 IDEA 里对 <code>ServerListenThread.processSockets()</code> 内部打断点，看到了这行：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">ServerSocketWrapper</span><span style="color: #E06C75"> serverSocket </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> (ServerSocketWrapper) </span><span style="color: #E5C07B">key</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">attachment</span><span style="color: #ABB2BF">();</span></span></code></pre>
@@ -327,7 +327,7 @@
 <span class="line"><span style="color: #abb2bf">                    └── [ProtocolHandlerIIOP@xxxx]  &#x3C;--- 被封装在里面</span></span></code></pre>
 <h3 id="注入效果验证">注入效果验证</h3>
 <p>注入后，回到 <code>isMessageComplete()</code> 设断点，Alt+F8 执行 <code>this.channels[0].getProtocol().getHandler()</code>：</p>
-<p><img src="../../images/weblogic-memory-shell/10.png" alt="注入后 IIOP handler 变为 T33BehinderShell"></p>
+<p><img src="/images/weblogic-memory-shell/10.png" alt="注入后 IIOP handler 变为 T33BehinderShell"></p>
 <p>结果不再是 <code>ProtocolHandlerIIOP@xxxx</code>，而是 <code>T33BehinderShell$1@4739</code>——匿名 InvocationHandler 的实例。展开后能看到内部的 <code>iiopHandler</code> 还是指向原始 <code>ProtocolHandlerIIOP</code>，对应于代码里 <code>m.invoke(iiopHandler, a)</code> 的 fallback。对比注入前的截图 05，确认 IIOP handler 已被替换。</p>
 <hr>
 <h2 id="三构造协议层运行的冰蝎内存马">三、构造协议层运行的冰蝎内存马</h2>
@@ -477,12 +477,12 @@
 <span class="line"><span style="color: #ABB2BF">    </span><span style="color: #61AFEF">main</span><span style="color: #ABB2BF">()</span></span></code></pre>
 <h3 id="34-验证">3.4 验证</h3>
 <p>冰蝎连接 <code>http://127.0.0.1:8889/</code>，密码 <code>rebeyond</code>：</p>
-<p><img src="../../images/weblogic-memory-shell/11.png" alt="冰蝎连接成功 - 文件管理"></p>
-<p><img src="../../images/weblogic-memory-shell/12.png" alt="冰蝎连接成功 - 命令执行"></p>
+<p><img src="/images/weblogic-memory-shell/11.png" alt="冰蝎连接成功 - 文件管理"></p>
+<p><img src="/images/weblogic-memory-shell/12.png" alt="冰蝎连接成功 - 命令执行"></p>
 <p>文件管理和命令执行正常。</p>
 <h3 id="35-断点冰蝎流量进入-handlet33">3.5 断点：冰蝎流量进入 handleT33</h3>
 <p>在 <code>handleT33()</code> 入口处打断点，冰蝎执行命令后命中：</p>
-<p><img src="../../images/weblogic-memory-shell/13.png" alt="T33BehinderShell 断点命中"></p>
+<p><img src="/images/weblogic-memory-shell/13.png" alt="T33BehinderShell 断点命中"></p>
 <p>Frames 面板显示完整的调用链：<code>Proxy.invoke() → handleT33()</code>，证明冰蝎加密流量确实走到了自定义代码。Variables 面板的 <code>body</code> 变量就是冰蝎发来的 base64 密文。</p>
 <p>动态注入的 class 为什么能断点调试？JVM 的调试协议只看栈帧里的类名和行号，不关心这个 class 是怎么加载的。</p>
 <h3 id="36-流量分析">3.6 流量分析</h3>
@@ -492,9 +492,9 @@
 <span class="line"><span style="color: #abb2bf"></span></span>
 <span class="line"><span style="color: #abb2bf">HTTP 到本地代理就停了。WebLogic 收到的不是 HTTP，是自定义字节流。</span></span></code></pre>
 <p>在 VM 上抓包，Wireshark 打开后只看到 TCP 三次握手和一堆无法解析的二进制数据——没有 <code>GET</code>、没有 <code>POST</code>、没有 <code>200 OK</code>：</p>
-<p><img src="../../images/weblogic-memory-shell/14.png" alt="Wireshark 总览 - 四次连接"></p>
+<p><img src="/images/weblogic-memory-shell/14.png" alt="Wireshark 总览 - 四次连接"></p>
 <p>拆开一次连接的完整过程：</p>
-<p><img src="../../images/weblogic-memory-shell/15.png" alt="Wireshark 单次连接 - Follow TCP Stream"></p>
+<p><img src="/images/weblogic-memory-shell/15.png" alt="Wireshark 单次连接 - Follow TCP Stream"></p>
 <p>请求方向以 <code>0x33</code> 开头，后面全是 base64 密文；响应方向是 payload 执行结果的原生字节，Wireshark 没有对应协议的解析器。</p>
       </article>
 
@@ -527,9 +527,9 @@
       </ul>
 
       <div class="mx-auto mt-8 max-w-3xl text-sm opacity-70 astro-VJ4TPSPI">
-        <span id="view-count" class="view-count-loading astro-VJ4TPSPI">闃呰缁熻涓?..</span>
+        <span id="view-count" class="view-count-loading astro-VJ4TPSPI">阅读统计中...</span>
         <span id="busuanzi_container_page_pv" style="display:none" class="astro-VJ4TPSPI">
-          闃呰 <span id="busuanzi_value_page_pv" class="astro-VJ4TPSPI"></span>
+          阅读 <span id="busuanzi_value_page_pv" class="astro-VJ4TPSPI"></span>
         </span>
       </div>
 
@@ -541,8 +541,8 @@
 
     <aside id="toc-sidebar" class="toc-sidebar astro-VJ4TPSPI">
       <div class="toc-header astro-VJ4TPSPI">
-        <span class="toc-title astro-VJ4TPSPI">鐩綍</span>
-        <button id="toc-close" class="toc-close astro-VJ4TPSPI" title="闅愯棌鐩綍">
+        <span class="toc-title astro-VJ4TPSPI">目录</span>
+        <button id="toc-close" class="toc-close astro-VJ4TPSPI" title="隐藏目录">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="astro-VJ4TPSPI">
             <path fill-rule="evenodd" d="M11.854 4.146a.5.5 0 0 1 0 .708L8.707 8l3.147 3.146a.5.5 0 0 1-.708.708L8 8.707l-3.146 3.147a.5.5 0 0 1-.708-.708L7.293 8 4.146 4.854a.5.5 0 1 1 .708-.708L8 7.293l3.146-3.147a.5.5 0 0 1 .708 0z" class="astro-VJ4TPSPI"></path>
           </svg>
@@ -550,7 +550,7 @@
       </div>
       <div class="toc-progress astro-VJ4TPSPI">
         <div class="toc-progress-meta astro-VJ4TPSPI">
-          <span class="toc-progress-label astro-VJ4TPSPI">宸茶</span>
+          <span class="toc-progress-label astro-VJ4TPSPI">已读</span>
           <span id="toc-progress-value" class="toc-progress-value astro-VJ4TPSPI">0%</span>
         </div>
         <div class="toc-progress-track astro-VJ4TPSPI" aria-hidden="true">
@@ -563,11 +563,11 @@
         </nav>
       </div>
     </aside>
-    <button id="toc-tab" class="toc-tab hidden astro-VJ4TPSPI" title="鏄剧ず鐩綍">
+    <button id="toc-tab" class="toc-tab hidden astro-VJ4TPSPI" title="显示目录">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="astro-VJ4TPSPI">
         <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" class="astro-VJ4TPSPI"></path>
       </svg>
-      <span class="toc-tab-label astro-VJ4TPSPI">鐩綍</span>
+      <span class="toc-tab-label astro-VJ4TPSPI">目录</span>
     </button>
   </div>
   <footer class="mt-auto astro-SZ7XMLTE">
