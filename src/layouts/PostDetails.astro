@@ -129,7 +129,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     margin: 2rem 0;
   }
 
-  /* TOC Sidebar 鈥?fixed right, slide in/out */
+  /* TOC sidebar: fixed right, slide in/out */
   .toc-sidebar {
     position: fixed;
     top: 0;
@@ -226,7 +226,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     color: rgb(var(--color-accent));
   }
 
-  /* Toggle tab 鈥?always visible at right edge */
+  /* Toggle tab: always visible at right edge */
   .toc-tab {
     position: fixed;
     right: 0;
@@ -267,43 +267,67 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     margin: 0;
     font-size: 0.875rem;
   }
-  .toc-list li {
+  .toc-list :global(li) {
     margin: 0.2rem 0;
     color: rgb(var(--color-text-base) / 0.5);
   }
-  .toc-list ol {
+  .toc-list :global(ol) {
     margin: 0.25rem 0 0.3rem;
     padding-left: 1.15rem;
   }
-  .toc-list a {
+  .toc-list :global(a) {
     color: rgb(var(--color-text-base));
     opacity: 0.7;
     text-decoration: none;
     display: block;
-    padding: 0.32rem 0 0.32rem 0.7rem;
-    border-left: 2px solid transparent;
-    border-radius: 0 0.45rem 0.45rem 0;
+    position: relative;
+    padding: 0.34rem 0.55rem 0.34rem 0.85rem;
+    border-left: 3px solid transparent;
+    border-radius: 0 0.5rem 0.5rem 0;
     transition:
       opacity 0.15s,
       color 0.15s,
       border-color 0.2s,
-      background-color 0.2s;
+      background-color 0.2s,
+      transform 0.2s;
   }
-  .toc-list a:hover {
+  .toc-list :global(a:hover) {
     opacity: 1;
     color: rgb(var(--color-accent));
   }
-  .toc-list a.active {
+  .toc-list :global(li.active-parent > a:not(.active)) {
+    opacity: 0.95;
+    color: rgba(var(--color-accent), 0.88);
+    background: rgba(var(--color-accent), 0.06);
+  }
+  .toc-list :global(a.active) {
     opacity: 1 !important;
     color: rgb(var(--color-accent)) !important;
-    font-weight: 600;
-    border-left: 2px solid rgb(var(--color-accent));
-    background: rgb(var(--color-accent) / 0.08);
+    font-weight: 700;
+    border-left-color: rgb(var(--color-accent));
+    background: linear-gradient(
+      90deg,
+      rgba(var(--color-accent), 0.16),
+      rgba(var(--color-accent), 0.06)
+    );
+    transform: translateX(2px);
   }
-  .toc-list li.active-parent {
+  .toc-list :global(a.active::before) {
+    content: "";
+    position: absolute;
+    left: -0.44rem;
+    top: 50%;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: rgb(var(--color-accent));
+    box-shadow: 0 0 0 3px rgba(var(--color-accent), 0.16);
+    transform: translateY(-50%);
+  }
+  .toc-list :global(li.active-parent) {
     color: rgb(var(--color-accent) / 0.9);
   }
-  .toc-list .toc-h3 {
+  .toc-list :global(.toc-h3) {
     list-style: decimal;
   }
   .view-count-loading {
@@ -386,7 +410,7 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
     const links = Array.from(document.querySelectorAll("#toc-list a"));
     if (!links.length) return;
 
-    let activeId = headings[0]?.id ?? "";
+    let activeId = "";
 
     const setActive = id => {
       if (!id || id === activeId) return;
@@ -399,6 +423,11 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
       links.forEach(link => {
         const isActive = link.getAttribute("href") === `#${id}`;
         link.classList.toggle("active", isActive);
+        if (isActive) {
+          link.setAttribute("aria-current", "true");
+        } else {
+          link.removeAttribute("aria-current");
+        }
 
         if (isActive) {
           let node = link.closest("li");
@@ -406,49 +435,36 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
             node.classList.add("active-parent");
             node = node.parentElement?.closest("li");
           }
-          link.scrollIntoView({ block: "nearest" });
+          link.scrollIntoView({ block: "nearest", inline: "nearest" });
         }
       });
     };
 
-    setActive(activeId);
+    const updateActiveHeading = () => {
+      const anchor = Math.max(120, window.innerHeight * 0.28);
+      let current = headings[0];
 
-    const visibleHeadings = new Map();
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            visibleHeadings.set(entry.target.id, entry.boundingClientRect.top);
-          } else {
-            visibleHeadings.delete(entry.target.id);
-          }
-        });
-
-        const topVisible = [...visibleHeadings.entries()]
-          .sort((a, b) => Math.abs(a[1]) - Math.abs(b[1]))[0]?.[0];
-
-        if (topVisible) {
-          setActive(topVisible);
-          return;
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top <= anchor) {
+          current = heading;
+        } else {
+          break;
         }
-
-        for (let i = headings.length - 1; i >= 0; i -= 1) {
-          const heading = headings[i];
-          if (heading.getBoundingClientRect().top <= 140) {
-            setActive(heading.id);
-            return;
-          }
-        }
-
-        setActive(headings[0]?.id ?? "");
-      },
-      {
-        rootMargin: "-20% 0px -65% 0px",
-        threshold: [0, 1],
       }
-    );
 
-    headings.forEach(heading => observer.observe(heading));
+      setActive(current?.id ?? headings[0]?.id ?? "");
+    };
+
+    const requestUpdate = () => {
+      updateActiveHeading();
+    };
+
+    updateActiveHeading();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    if (typeof window.setInterval === "function") {
+      window.setInterval(requestUpdate, 300);
+    }
   }
 
   function updateTOCProgress() {
@@ -470,6 +486,9 @@ const ogUrl = new URL(ogImage ? ogImage : `${title}.png`, Astro.url.origin)
   buildTOC();
   window.addEventListener("scroll", updateTOCProgress, { passive: true });
   window.addEventListener("resize", updateTOCProgress);
+  if (typeof window.setInterval === "function") {
+    window.setInterval(updateTOCProgress, 500);
+  }
 
   const sidebar = document.getElementById("toc-sidebar");
   const closeBtn = document.getElementById("toc-close");
