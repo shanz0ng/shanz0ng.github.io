@@ -116,12 +116,40 @@
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">readObject()</span></span>
 <span class="line"><span style="color: #abb2bf"> -> ...</span></span>
 <span class="line"><span style="color: #abb2bf"> -> Runtime.exec()</span></span></code></pre>
-<p>但这条顺序本身并不能解释两件更关键的事：Commons Collections 当年到底想补什么能力，这几块能力后来又为什么会被接进反序列化流程。</p>
-<p><code>ConstantTransformer</code>、<code>InvokerTransformer</code>、<code>ChainedTransformer</code> 也就不再只是链上的几个类名，而是三块先被设计出来、后来又被串进利用链的基础积木。</p>
+<p>但这条顺序本身并不能解释最关键的部分：Commons Collections 这些类最初并不是为了“调用命令”而设计的，它们是在 Java 还没有 lambda、没有 <code>java.util.function</code> 的年代，试图补上一套函数式表达能力。</p>
+<p><code>ConstantTransformer</code>、<code>InvokerTransformer</code>、<code>ChainedTransformer</code> 也就不只是链上的几个类名。它们分别对应常量函数、一次函数调用、函数复合。CC1 的精髓就在这里：攻击者没有发明新的执行机制，只是把一套原本用于组合处理逻辑的函数式积木，换了一组参数，再接进了反序列化触发点。</p>
 <hr>
-<h2 id="一commons-collections-想补的是什么能力">一、Commons Collections 想补的是什么能力</h2>
-<p>2000 年代初的 Java 还没有泛型，没有 lambda，也没有 <code>java.util.function</code>。但“把一段处理逻辑单独拿出来，再交给别的代码去执行”这种需求一直存在。Commons Collections 试图补上的，正是这一层表达能力。</p>
-<p>它在 <code>org.apache.commons.collections</code> 里定义了一组 functor 接口：</p>
+<h2 id="一commons-collections-想补函数式表达能力">一、Commons Collections 想补函数式表达能力</h2>
+<p>2000 年代初的 Java 还没有泛型，没有 lambda，也没有 <code>java.util.function</code>。但“把一段处理逻辑当成值保存起来，再交给别的代码执行”这种需求一直存在。Haskell、Lisp、Erlang、Scala 这些语言早就把函数当成一等公民；Java 当时没有函数类型，Commons Collections 只能用接口和对象去模拟。</p>
+<p>CC 这套 functor 体系不是一下子冒出来的。大致可以看成两个阶段：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>时间</th><th>内容</th></tr></thead><tbody><tr><td>CC 1.0</td><td>2001 前后</td><td><code>Transformer</code>、<code>Predicate</code>、<code>Closure</code> 三个 functor 接口</td></tr><tr><td>CC 2.1</td><td>2002 前后</td><td>补上 <code>Factory</code> 接口</td></tr><tr><td>CC 3.0</td><td>2004 年</td><td><code>ConstantTransformer</code>、<code>InvokerTransformer</code>、<code>ChainedTransformer</code> 等大量实现类</td></tr></tbody></table>
+<p>先定接口，再补实现，这更像是在给 Java 搭一套“小型函数系统”，而不只是给集合工具包随手加几个回调类。</p>
+<p>它在 <code>org.apache.commons.collections</code> 里定义的四个核心接口是：</p>
 
 
 
@@ -153,7 +181,23 @@
 
 
 <table><thead><tr><th>接口</th><th>方法签名</th><th>Java 8 中最接近的接口</th></tr></thead><tbody><tr><td><code>Transformer</code></td><td><code>Object transform(Object input)</code></td><td><code>Function&#x3C;T, R></code></td></tr><tr><td><code>Predicate</code></td><td><code>boolean evaluate(Object obj)</code></td><td><code>Predicate&#x3C;T></code></td></tr><tr><td><code>Closure</code></td><td><code>void execute(Object input)</code></td><td><code>Consumer&#x3C;T></code></td></tr><tr><td><code>Factory</code></td><td><code>Object create()</code></td><td><code>Supplier&#x3C;T></code></td></tr></tbody></table>
-<p>CC 3.0 之后，<code>functors</code> 包里又继续补上了大量实现类。对 CC1 最关键的，不是全部 40 多个实现，而是其中三块最基础的积木：</p>
+<p><code>functor</code> 本身就是函数式编程里的词，意思接近“可以像函数一样被调用的对象”。CC 3.0 源码里，这几个接口的 Javadoc 开头也都在强调这一点：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #7F848E; font-style: italic">// Transformer.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    transform one object into another. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Predicate.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    perform a predicate test on an object. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Closure.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    do something. */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">// Factory.java</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">/** Defines a functor interface implemented by classes that</span></span>
+<span class="line"><span style="color: #7F848E; font-style: italic">    create objects. */</span></span></code></pre>
+<p>对 CC1 最关键的，不是 functors 包里所有实现，而是其中三块最基础的函数积木：</p>
 
 
 
@@ -175,13 +219,25 @@
 
 
 
-<table><thead><tr><th>需要表达的能力</th><th>CC 中的实现</th></tr></thead><tbody><tr><td>固定返回一个值</td><td><code>ConstantTransformer</code></td></tr><tr><td>把一次方法调用包装成一步</td><td><code>InvokerTransformer</code></td></tr><tr><td>把多个步骤顺序串起来</td><td><code>ChainedTransformer</code></td></tr></tbody></table>
-<p>放到今天看，这套设计对应的就是后来 Java 8 用标准库正式提供出来的那层能力：把处理步骤单独拿出来，再按顺序组合。</p>
+<table><thead><tr><th>函数形态</th><th>CC 中的实现</th></tr></thead><tbody><tr><td><code>f(x) = c</code>，常量函数</td><td><code>ConstantTransformer</code></td></tr><tr><td><code>f(x) = x.m(a)</code>，对输入调用方法</td><td><code>InvokerTransformer</code></td></tr><tr><td><code>f(x) = f3(f2(f1(x)))</code>，函数复合</td><td><code>ChainedTransformer</code></td></tr></tbody></table>
+<p><code>ConstantTransformer</code> 的存在本身就很能说明问题。一个只做集合回调的工具库，不太需要专门做“常量函数”；但一套函数式积木需要，因为常量函数可以给整条计算链一个起点。</p>
 <hr>
-<h2 id="二三块积木各自补了什么能力">二、三块积木各自补了什么能力</h2>
-<p>如果把这三块积木放进一条熟悉的命令里，它们会更直观：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #56B6C2">echo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">baidu.com</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./SubFinder/subfinder</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./KsubDomain/ksubdomain</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTProbe/httprobe</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTPX/httpx</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-title</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-ip</span></span></code></pre>
-<p>这条管道做的事情很简单：给定一个起点 <code>baidu.com</code>，后面的每个工具各做一步处理，再把结果继续交给下一个工具。CC 里的三块积木，刚好对应这条管道里的三个角色：起点、步骤、串联。</p>
+<h2 id="二三块积木就是值参数和管道">二、三块积木就是值、参数和管道</h2>
+<p>理解这套设计，抓住三个词就够了：值、参数、管道。</p>
+<p>函数式编程里，函数跟普通数据一样，可以赋给变量，可以作为参数传给别的函数，也可以首尾相接组成一条流水线。放到数学上，就是熟悉的：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">f(x) = x² + 1</span></span></code></pre>
+<p>CC 的 <code>Transformer</code>，本质上就是把这种 <code>f(x)</code> 写成了 Java 对象：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">transform</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> input)</span><span style="color: #ABB2BF">;</span></span></code></pre>
+<p>再看这条命令：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #56B6C2">echo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">baidu.com</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./SubFinder/subfinder</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./KsubDomain/ksubdomain</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-silent</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTProbe/httprobe</span><span style="color: #ABB2BF"> | </span><span style="color: #61AFEF">./HTTPX/httpx</span><span style="color: #ABB2BF"> </span><span style="color: #D19A66">-title/-ip</span></span></code></pre>
+<p>它从 <code>baidu.com</code> 出发，发现子域名，筛选存活目标，探测 HTTP，再提取标题和 IP。每个工具只做一步，管道符负责把上一步的输出交给下一步。</p>
+<p>CC 里的三块积木，刚好对应这条管道里的三个角色：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">echo baidu.com  -> F1("baidu.com")       常量函数，给出起点</span></span>
+<span class="line"><span style="color: #abb2bf">subfinder       -> F2("subfinder")       对输入做一步处理</span></span>
+<span class="line"><span style="color: #abb2bf">ksubdomain      -> F2("ksubdomain")      对输入做一步处理</span></span>
+<span class="line"><span style="color: #abb2bf">httprobe        -> F2("httprobe")        对输入做一步处理</span></span>
+<span class="line"><span style="color: #abb2bf">httpx           -> F2("httpx")           对输入做一步处理</span></span>
+<span class="line"><span style="color: #abb2bf">整条管道         -> F3([F1,F2,F2,F2,F2])  函数复合</span></span></code></pre>
 <h3 id="21-constanttransformer固定给出一个起点">2.1 <code>ConstantTransformer</code>：固定给出一个起点</h3>
 <p>最简单的函数，是不管输入是什么，输出都一样：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">f(x) = c</span></span></code></pre>
@@ -196,8 +252,7 @@
 <p><code>input</code> 传进来了，但根本没有参与计算，<code>transform()</code> 只是把构造时保存下来的 <code>iConstant</code> 原样返回出去。</p>
 <p>放到上面那条命令里，它最像开头这一步：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #56B6C2">echo</span><span style="color: #ABB2BF"> </span><span style="color: #98C379">baidu.com</span></span></code></pre>
-<p>前面有没有输入都不重要，它只负责给整条流程一个固定起点。</p>
-<p>在正常场景里，这种能力并不危险。它只是把“起点”从代码里抽出来，变成一个可以被后续流程继续处理的对象。</p>
+<p>在函数式流水线里，常量函数的意义就是给流程一个稳定起点。前面有没有输入都不重要，它只负责把第一个值交出来。</p>
 <h3 id="22-invokertransformer把一次方法调用包装成一步">2.2 <code>InvokerTransformer</code>：把一次方法调用包装成一步</h3>
 <p><code>InvokerTransformer</code> 做的，是把一次方法调用本身对象化。</p>
 <p>它会先记住三类信息：</p>
@@ -221,10 +276,10 @@
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">给我一个对象</span></span>
 <span class="line"><span style="color: #abb2bf"> -> 在它上面调一次指定方法</span></span>
 <span class="line"><span style="color: #abb2bf"> -> 把返回值交给下一步</span></span></code></pre>
-<p>放到那条管道里，<code>subfinder</code>、<code>ksubdomain</code>、<code>httprobe</code>、<code>httpx</code> 这些步骤都很像这种“拿到上一步的结果，再做一步既定处理”的过程。</p>
+<p>放到那条管道里，<code>subfinder</code>、<code>ksubdomain</code>、<code>httprobe</code>、<code>httpx</code> 都是这种“拿到上一步结果，再做一步处理”的函数。</p>
 <p>一旦“方法调用”也能被包装成普通对象，后面它就能像其他步骤一样被继续串联。</p>
 <h3 id="23-chainedtransformer把步骤串成一条可传递的流程">2.3 <code>ChainedTransformer</code>：把步骤串成一条可传递的流程</h3>
-<p>前两块积木解决的是“步骤能不能被单独拿出来”。<code>ChainedTransformer</code> 解决的，则是“这些步骤拿出来之后，能不能按顺序接起来”。</p>
+<p>前两块积木解决的是“起点和步骤能不能被对象化”。<code>ChainedTransformer</code> 解决的是“这些函数对象能不能按顺序复合”。</p>
 <p>它表达的是：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">F(x) = f3(f2(f1(x)))</span></span></code></pre>
 <p>也就是：</p>
@@ -247,10 +302,14 @@
 <span class="line"><span style="color: #E06C75">    }</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> object</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #E06C75">}</span></span></code></pre>
-<p>这三块积木放在一起，起点、步骤、串联也就都有了。</p>
+<p>这三块积木放在一起，就不再是零散的工具类，而是一套函数流水线：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">值</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 一步处理</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 一步处理</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 一步处理</span></span></code></pre>
 <hr>
-<h2 id="三参数一换正常抽象就会变成危险调用">三、参数一换，正常抽象就会变成危险调用</h2>
-<p>问题不在于这三块积木本身“天生危险”，而在于它们对参数保持开放。设计者希望它们足够通用，攻击者利用的也正是这种通用性。</p>
+<h2 id="三参数一换函数流水线就变成调用链">三、参数一换，函数流水线就变成调用链</h2>
+<p>问题不在于这三块积木本身“天生危险”，而在于函数式积木天然要对参数开放。<code>ConstantTransformer</code> 不关心常量是什么，<code>InvokerTransformer</code> 不关心方法名是什么，<code>ChainedTransformer</code> 不关心串起来的是普通处理流程还是危险调用流程。</p>
 <p>三块积木写成抽象形式，就是这样：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F1</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Object</span><span style="color: #E06C75"> constant) {</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ConstantTransformer</span><span style="color: #E06C75">(constant)</span><span style="color: #ABB2BF">;</span></span>
@@ -263,13 +322,23 @@
 <span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F3</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75">[] transformers) {</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ChainedTransformer</span><span style="color: #E06C75">(transformers)</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #E06C75">}</span></span></code></pre>
-<p>把它们代回刚才那条命令，处理结构就是：</p>
+<p>正常参数下，它可以表达一条普通管道：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">F1("baidu.com")</span></span>
 <span class="line"><span style="color: #abb2bf"> -> F2("subfinder")</span></span>
 <span class="line"><span style="color: #abb2bf"> -> F2("ksubdomain")</span></span>
 <span class="line"><span style="color: #abb2bf"> -> F2("httprobe")</span></span>
 <span class="line"><span style="color: #abb2bf"> -> F2("httpx")</span></span></code></pre>
-<p>正常场景里，这些参数完全可以指向一条普通处理流程；但一旦参数换成下面这样：</p>
+<p>参数换掉以后，管道结构不变，含义变了：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">设计者往管道里装的：            攻击者往管道里装的：</span></span>
+<span class="line"><span style="color: #abb2bf">─────────────────────          ─────────────────────</span></span>
+<span class="line"><span style="color: #abb2bf">F1("baidu.com")                F1(Runtime.class)</span></span>
+<span class="line"><span style="color: #abb2bf">F2("subfinder")                F2("getMethod", [String,Class[]], ["getRuntime",null])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("ksubdomain")               F2("invoke",    [Object,Object[]], [null,null])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("httprobe")                 F2("exec",      [String],          ["calc"])</span></span>
+<span class="line"><span style="color: #abb2bf">F2("httpx")</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">F3 管道 = 一模一样，没变</span></span></code></pre>
+<p>落到代码上，就是：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">static</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">payload</span><span style="color: #E06C75">() {</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">F3</span><span style="color: #E06C75">(</span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Transformer</span><span style="color: #E06C75">[] {</span></span>
 <span class="line"><span style="color: #E06C75">        </span><span style="color: #61AFEF">F1</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Runtime</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">,</span></span>
@@ -286,7 +355,7 @@
 <span class="line"><span style="color: #abb2bf"> -> getMethod("getRuntime", ...)</span></span>
 <span class="line"><span style="color: #abb2bf"> -> invoke(null, null)</span></span>
 <span class="line"><span style="color: #abb2bf"> -> exec("calc")</span></span></code></pre>
-<p>变化的不是 API，也不是类的设计意图，而是“方法调用能力”被串到了一个危险落点上。</p>
+<p>变化的不是 API，也不是类的设计意图，而是传进去的函数参数。设计者做的是“把处理步骤对象化并串起来”；攻击者做的是把这些步骤换成 <code>getMethod -> invoke -> exec</code>。</p>
 <p>CC1 后半段落到代码结构上，就是这一层：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">固定起点</span></span>
 <span class="line"><span style="color: #abb2bf"> -> 单步调用</span></span>

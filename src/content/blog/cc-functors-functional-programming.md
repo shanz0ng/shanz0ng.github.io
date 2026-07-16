@@ -24,17 +24,27 @@ readObject()
  -> Runtime.exec()
 ```
 
-但这条顺序本身并不能解释两件更关键的事：Commons Collections 当年到底想补什么能力，这几块能力后来又为什么会被接进反序列化流程。
+但这条顺序本身并不能解释最关键的部分：Commons Collections 这些类最初并不是为了“调用命令”而设计的，它们是在 Java 还没有 lambda、没有 `java.util.function` 的年代，试图补上一套函数式表达能力。
 
-`ConstantTransformer`、`InvokerTransformer`、`ChainedTransformer` 也就不再只是链上的几个类名，而是三块先被设计出来、后来又被串进利用链的基础积木。
+`ConstantTransformer`、`InvokerTransformer`、`ChainedTransformer` 也就不只是链上的几个类名。它们分别对应常量函数、一次函数调用、函数复合。CC1 的精髓就在这里：攻击者没有发明新的执行机制，只是把一套原本用于组合处理逻辑的函数式积木，换了一组参数，再接进了反序列化触发点。
 
 ---
 
-## 一、Commons Collections 想补的是什么能力
+## 一、Commons Collections 想补函数式表达能力
 
-2000 年代初的 Java 还没有泛型，没有 lambda，也没有 `java.util.function`。但“把一段处理逻辑单独拿出来，再交给别的代码去执行”这种需求一直存在。Commons Collections 试图补上的，正是这一层表达能力。
+2000 年代初的 Java 还没有泛型，没有 lambda，也没有 `java.util.function`。但“把一段处理逻辑当成值保存起来，再交给别的代码执行”这种需求一直存在。Haskell、Lisp、Erlang、Scala 这些语言早就把函数当成一等公民；Java 当时没有函数类型，Commons Collections 只能用接口和对象去模拟。
 
-它在 `org.apache.commons.collections` 里定义了一组 functor 接口：
+CC 这套 functor 体系不是一下子冒出来的。大致可以看成两个阶段：
+
+| 版本 | 时间 | 内容 |
+|------|------|------|
+| CC 1.0 | 2001 前后 | `Transformer`、`Predicate`、`Closure` 三个 functor 接口 |
+| CC 2.1 | 2002 前后 | 补上 `Factory` 接口 |
+| CC 3.0 | 2004 年 | `ConstantTransformer`、`InvokerTransformer`、`ChainedTransformer` 等大量实现类 |
+
+先定接口，再补实现，这更像是在给 Java 搭一套“小型函数系统”，而不只是给集合工具包随手加几个回调类。
+
+它在 `org.apache.commons.collections` 里定义的四个核心接口是：
 
 | 接口 | 方法签名 | Java 8 中最接近的接口 |
 |------|----------|------------------------|
@@ -43,27 +53,72 @@ readObject()
 | `Closure` | `void execute(Object input)` | `Consumer<T>` |
 | `Factory` | `Object create()` | `Supplier<T>` |
 
-CC 3.0 之后，`functors` 包里又继续补上了大量实现类。对 CC1 最关键的，不是全部 40 多个实现，而是其中三块最基础的积木：
+`functor` 本身就是函数式编程里的词，意思接近“可以像函数一样被调用的对象”。CC 3.0 源码里，这几个接口的 Javadoc 开头也都在强调这一点：
 
-| 需要表达的能力 | CC 中的实现 |
-|----------------|-------------|
-| 固定返回一个值 | `ConstantTransformer` |
-| 把一次方法调用包装成一步 | `InvokerTransformer` |
-| 把多个步骤顺序串起来 | `ChainedTransformer` |
+```java
+// Transformer.java
+/** Defines a functor interface implemented by classes that
+    transform one object into another. */
 
-放到今天看，这套设计对应的就是后来 Java 8 用标准库正式提供出来的那层能力：把处理步骤单独拿出来，再按顺序组合。
+// Predicate.java
+/** Defines a functor interface implemented by classes that
+    perform a predicate test on an object. */
+
+// Closure.java
+/** Defines a functor interface implemented by classes that
+    do something. */
+
+// Factory.java
+/** Defines a functor interface implemented by classes that
+    create objects. */
+```
+
+对 CC1 最关键的，不是 functors 包里所有实现，而是其中三块最基础的函数积木：
+
+| 函数形态 | CC 中的实现 |
+|----------|-------------|
+| `f(x) = c`，常量函数 | `ConstantTransformer` |
+| `f(x) = x.m(a)`，对输入调用方法 | `InvokerTransformer` |
+| `f(x) = f3(f2(f1(x)))`，函数复合 | `ChainedTransformer` |
+
+`ConstantTransformer` 的存在本身就很能说明问题。一个只做集合回调的工具库，不太需要专门做“常量函数”；但一套函数式积木需要，因为常量函数可以给整条计算链一个起点。
 
 ---
 
-## 二、三块积木各自补了什么能力
+## 二、三块积木就是值、参数和管道
 
-如果把这三块积木放进一条熟悉的命令里，它们会更直观：
+理解这套设计，抓住三个词就够了：值、参数、管道。
 
-```bash
-echo baidu.com | ./SubFinder/subfinder -silent | ./KsubDomain/ksubdomain -silent | ./HTTProbe/httprobe | ./HTTPX/httpx -title -ip
+函数式编程里，函数跟普通数据一样，可以赋给变量，可以作为参数传给别的函数，也可以首尾相接组成一条流水线。放到数学上，就是熟悉的：
+
+```text
+f(x) = x² + 1
 ```
 
-这条管道做的事情很简单：给定一个起点 `baidu.com`，后面的每个工具各做一步处理，再把结果继续交给下一个工具。CC 里的三块积木，刚好对应这条管道里的三个角色：起点、步骤、串联。
+CC 的 `Transformer`，本质上就是把这种 `f(x)` 写成了 Java 对象：
+
+```java
+Object transform(Object input);
+```
+
+再看这条命令：
+
+```bash
+echo baidu.com | ./SubFinder/subfinder -silent | ./KsubDomain/ksubdomain -silent | ./HTTProbe/httprobe | ./HTTPX/httpx -title/-ip
+```
+
+它从 `baidu.com` 出发，发现子域名，筛选存活目标，探测 HTTP，再提取标题和 IP。每个工具只做一步，管道符负责把上一步的输出交给下一步。
+
+CC 里的三块积木，刚好对应这条管道里的三个角色：
+
+```text
+echo baidu.com  -> F1("baidu.com")       常量函数，给出起点
+subfinder       -> F2("subfinder")       对输入做一步处理
+ksubdomain      -> F2("ksubdomain")      对输入做一步处理
+httprobe        -> F2("httprobe")        对输入做一步处理
+httpx           -> F2("httpx")           对输入做一步处理
+整条管道         -> F3([F1,F2,F2,F2,F2])  函数复合
+```
 
 ### 2.1 `ConstantTransformer`：固定给出一个起点
 
@@ -97,9 +152,7 @@ public Object transform(Object input) {
 echo baidu.com
 ```
 
-前面有没有输入都不重要，它只负责给整条流程一个固定起点。
-
-在正常场景里，这种能力并不危险。它只是把“起点”从代码里抽出来，变成一个可以被后续流程继续处理的对象。
+在函数式流水线里，常量函数的意义就是给流程一个稳定起点。前面有没有输入都不重要，它只负责把第一个值交出来。
 
 ### 2.2 `InvokerTransformer`：把一次方法调用包装成一步
 
@@ -135,13 +188,13 @@ public Object transform(Object input) {
  -> 把返回值交给下一步
 ```
 
-放到那条管道里，`subfinder`、`ksubdomain`、`httprobe`、`httpx` 这些步骤都很像这种“拿到上一步的结果，再做一步既定处理”的过程。
+放到那条管道里，`subfinder`、`ksubdomain`、`httprobe`、`httpx` 都是这种“拿到上一步结果，再做一步处理”的函数。
 
 一旦“方法调用”也能被包装成普通对象，后面它就能像其他步骤一样被继续串联。
 
 ### 2.3 `ChainedTransformer`：把步骤串成一条可传递的流程
 
-前两块积木解决的是“步骤能不能被单独拿出来”。`ChainedTransformer` 解决的，则是“这些步骤拿出来之后，能不能按顺序接起来”。
+前两块积木解决的是“起点和步骤能不能被对象化”。`ChainedTransformer` 解决的是“这些函数对象能不能按顺序复合”。
 
 它表达的是：
 
@@ -182,13 +235,20 @@ public Object transform(Object object) {
 }
 ```
 
-这三块积木放在一起，起点、步骤、串联也就都有了。
+这三块积木放在一起，就不再是零散的工具类，而是一套函数流水线：
+
+```text
+值
+ -> 一步处理
+ -> 一步处理
+ -> 一步处理
+```
 
 ---
 
-## 三、参数一换，正常抽象就会变成危险调用
+## 三、参数一换，函数流水线就变成调用链
 
-问题不在于这三块积木本身“天生危险”，而在于它们对参数保持开放。设计者希望它们足够通用，攻击者利用的也正是这种通用性。
+问题不在于这三块积木本身“天生危险”，而在于函数式积木天然要对参数开放。`ConstantTransformer` 不关心常量是什么，`InvokerTransformer` 不关心方法名是什么，`ChainedTransformer` 不关心串起来的是普通处理流程还是危险调用流程。
 
 三块积木写成抽象形式，就是这样：
 
@@ -206,7 +266,7 @@ static Transformer F3(Transformer[] transformers) {
 }
 ```
 
-把它们代回刚才那条命令，处理结构就是：
+正常参数下，它可以表达一条普通管道：
 
 ```text
 F1("baidu.com")
@@ -216,7 +276,21 @@ F1("baidu.com")
  -> F2("httpx")
 ```
 
-正常场景里，这些参数完全可以指向一条普通处理流程；但一旦参数换成下面这样：
+参数换掉以后，管道结构不变，含义变了：
+
+```text
+设计者往管道里装的：            攻击者往管道里装的：
+─────────────────────          ─────────────────────
+F1("baidu.com")                F1(Runtime.class)
+F2("subfinder")                F2("getMethod", [String,Class[]], ["getRuntime",null])
+F2("ksubdomain")               F2("invoke",    [Object,Object[]], [null,null])
+F2("httprobe")                 F2("exec",      [String],          ["calc"])
+F2("httpx")
+
+F3 管道 = 一模一样，没变
+```
+
+落到代码上，就是：
 
 ```java
 static Transformer payload() {
@@ -241,7 +315,7 @@ Runtime.class
  -> exec("calc")
 ```
 
-变化的不是 API，也不是类的设计意图，而是“方法调用能力”被串到了一个危险落点上。
+变化的不是 API，也不是类的设计意图，而是传进去的函数参数。设计者做的是“把处理步骤对象化并串起来”；攻击者做的是把这些步骤换成 `getMethod -> invoke -> exec`。
 
 CC1 后半段落到代码结构上，就是这一层：
 
