@@ -112,105 +112,153 @@
       <div class="flex items-center space-x-2 opacity-80 my-2 astro-VJ4TPSPI"><svg xmlns="http://www.w3.org/2000/svg" class="scale-100 inline-block h-6 w-6 fill-skin-base" aria-hidden="true"><path d="M7 11h2v2H7zm0 4h2v2H7zm4-4h2v2h-2zm0 4h2v2h-2zm4-4h2v2h-2zm0 4h2v2h-2z"></path><path d="M5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM19 8l.001 12H5V8h14z"></path></svg><span class="sr-only">Posted on:</span><span class="italic text-base">2026年7月15日<span aria-hidden="true"> | </span><span class="sr-only"> at </span>08:00</span></div>
       <article id="article" role="article" class="prose mx-auto mt-8 max-w-3xl astro-VJ4TPSPI">
         <h1 id="cc3-反序列化链">CC3 反序列化链</h1>
-<p>CC3 可以看成 CC1 LazyMap 链的变体。前半段负责把一次普通的 <code>Map</code> 调用送进 <code>LazyMap.get()</code>，后半段把 <code>InvokerTransformer</code> 换成了 <code>InstantiateTransformer + TrAXFilter + TemplatesImpl</code>。</p>
-<hr>
-<h2 id="1-cc1-链的修补与限制">1. CC1 链的修补与限制</h2>
-<h3 id="11-serialkiller">1.1 SerialKiller</h3>
-<p><code>ysoserial</code> 公开后，第三方开始用反序列化过滤器拦截已知 gadget 类。<code>SerialKiller</code> 是这种思路的代表：它继承 <code>ObjectInputStream</code>，重写 <code>resolveClass()</code>，在类名解析阶段做黑白名单判断。</p>
-<p>源码位置：<a href="https://github.com/ikkisoft/SerialKiller/blob/4a09d4ad03e9e9535656ef7c55f9be0c046082b1/src/main/java/org/nibblesec/tools/SerialKiller.java#L40-L109">SerialKiller.java</a></p>
-<p>核心流程：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">resolveClass(ObjectStreamClass serialInput)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> serialInput.getName()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> blacklist 正则匹配</span></span>
-<span class="line"><span style="color: #abb2bf"> -> whitelist 正则匹配</span></span>
-<span class="line"><span style="color: #abb2bf"> -> 通过后再 super.resolveClass(serialInput)</span></span></code></pre>
-<p>早期配置主要盯 <code>InvokerTransformer</code>：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #ABB2BF">&#x3C;</span><span style="color: #E06C75">regexp</span><span style="color: #ABB2BF">>^org\.apache\.commons\.collections\.functors\.InvokerTransformer$&#x3C;/</span><span style="color: #E06C75">regexp</span><span style="color: #ABB2BF">></span></span></code></pre>
-<p>出处：<a href="https://github.com/ikkisoft/SerialKiller/blob/3ce0fe5/config/serialkiller.conf#L5-L15">3ce0fe5 serialkiller.conf</a></p>
-<p>CC3 的意义就在这里：它把 CC1 后半段里的 <code>InvokerTransformer</code> 换成了 <code>InstantiateTransformer + TrAXFilter + TemplatesImpl</code>。如果过滤器只盯 <code>InvokerTransformer</code>，这类变体就不会命中这条规则。</p>
-<p>后续 SerialKiller 也很快把 <code>InstantiateTransformer</code> 加进黑名单：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #ABB2BF">&#x3C;</span><span style="color: #E06C75">regexp</span><span style="color: #ABB2BF">>^org\.apache\.commons\.collections\.functors\.InstantiateTransformer$&#x3C;/</span><span style="color: #E06C75">regexp</span><span style="color: #ABB2BF">></span></span></code></pre>
-<p>出处：<a href="https://github.com/ikkisoft/SerialKiller/blob/3618195/config/serialkiller.conf#L5-L17">3618195 serialkiller.conf</a></p>
-<h3 id="12-apache-官方修补">1.2 Apache 官方修补</h3>
-<p>SerialKiller 是第三方过滤器，Apache Commons Collections 自己也做了官方修补。</p>
+<p>CC3 可以看成 CC1 LazyMap 链的后半段替换版。前半段仍然复用 CC1 的触发能力，变化点在执行手段和最终落点。</p>
+<h2 id="1-修补限制了单步调用能力">1. 修补限制了单步调用能力</h2>
+<p>这个变化不是平空出现的，而是发生在 CC1 已经被针对之后。外部防护和组件官方修补，分别从两个位置压缩了 CC1 的可用面。</p>
+<p>第一类是第三方过滤器，代表是 <code>SerialKiller</code>。它不是 Apache 官方组件，而是 <code>ikkisoft</code> / Luca Carettoni 维护的反序列化过滤库。它的思路不是理解整条 gadget 链，而是在 <code>ObjectInputStream.resolveClass()</code> 阶段先看“即将被反序列化的类名”，再用黑白名单决定是否放行。这个位置很关键，因为它拦截的不是 <code>readObject()</code> 里的某个具体动作，而是“这个类能不能进入反序列化流”。在早期配置里，它直接把 <code>InvokerTransformer</code> 放进黑名单；后续又把 <code>InstantiateTransformer</code> 也加入进去。</p>
+<p>第二类是 Apache Commons Collections 自己的官方修补。<code>3.2.2</code> 发布于 <strong>2015 年 11 月 15 日</strong>，开始对一批 unsafe functor 的序列化与反序列化做默认限制；<code>4.1</code> 则更进一步，直接让这些 unsafe 类不再实现 <code>Serializable</code>。这两步的区别很重要：前者是“类还在，但默认不让它通过序列化边界”，后者是“从类型层面切掉这条入口”。</p>
+<p>限制大致落在三个位置：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">SerialKiller 这类过滤器拦的是：</span></span>
+<span class="line"><span style="color: #abb2bf">  某个类名能不能进入反序列化流</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">Commons Collections 3.2.2 拦的是：</span></span>
+<span class="line"><span style="color: #abb2bf">  这些 unsafe functor 能不能继续参与序列化 / 反序列化</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">Commons Collections 4.1 拦的是：</span></span>
+<span class="line"><span style="color: #abb2bf">  这些 unsafe functor 是否还具备 Serializable 入口</span></span></code></pre>
+<p>对 CC1 来说，真正被压缩的是后半段的执行方式：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">InvokerTransformer</span></span>
+<span class="line"><span style="color: #abb2bf"> -> Method.invoke()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> Runtime.exec()</span></span></code></pre>
+<p>也就是说，被重点限制的是“单步方法调用”这一段，而不是整条链里所有组件都失效了。前半段的这些能力并没有同时消失：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">readObject() 仍然能带起调用</span></span>
+<span class="line"><span style="color: #abb2bf">LazyMap.get() 仍然能触发 transform()</span></span>
+<span class="line"><span style="color: #abb2bf">ChainedTransformer 仍然能串接别的执行组件</span></span></code></pre>
+<p>对应出处：</p>
 <ul>
-<li><strong>3.2.2</strong>：functor 包里的一批 unsafe 类，默认反序列化会被拒绝；如果真要恢复旧行为，需要显式设置 <code>org.apache.commons.collections.enableUnsafeSerialization=true</code></li>
-<li><strong>4.1</strong>：这些 unsafe 类不再实现 <code>Serializable</code></li>
-</ul>
-<p>官方出处：</p>
-<ul>
+<li><a href="https://github.com/ikkisoft/SerialKiller/blob/4a09d4ad03e9e9535656ef7c55f9be0c046082b1/src/main/java/org/nibblesec/tools/SerialKiller.java#L40-L109">SerialKiller.java</a></li>
+<li><a href="https://github.com/ikkisoft/SerialKiller/blob/3ce0fe5/config/serialkiller.conf#L5-L15">3ce0fe5 serialkiller.conf</a></li>
 <li><a href="https://commons.apache.org/proper/commons-collections/security.html">Apache Commons Collections Security Vulnerabilities</a></li>
 <li><a href="https://commons.apache.org/proper/commons-collections/changes.html#Release_3.2.2_%E2%80%93_2015-11-15">Commons Collections 3.2.2 release notes</a></li>
 <li><a href="https://commons.apache.org/proper/commons-collections/release_4_1.html">Commons Collections 4.1 release notes</a></li>
-<li><a href="https://commons.apache.org/proper/commons-collections/javadocs/api-3.2.2/org/apache/commons/collections/functors/InvokerTransformer.html">InvokerTransformer 3.2.2 API</a></li>
 </ul>
-<hr>
-<h2 id="2-链路总览">2. 链路总览</h2>
-<p>CC3 可以拆成两段看。</p>
-<p>第一段是触发段，和 CC1 LazyMap 链基本一致：反序列化过程中，<code>AnnotationInvocationHandler.readObject()</code> 调用了代理 <code>Map</code> 的 <code>entrySet()</code>，动态代理把这次调用转给内层 <code>AnnotationInvocationHandler.invoke()</code>，最后落到 <code>LazyMap.get("entrySet")</code>。</p>
-<p>第二段是执行段，也是 CC3 和 CC1 的主要差异。<code>LazyMap.get()</code> 触发 <code>ChainedTransformer</code> 后，不再走 <code>InvokerTransformer -> Runtime.exec()</code>，而是走：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">TrAXFilter.class</span></span>
-<span class="line"><span style="color: #abb2bf"> -> new TrAXFilter(templatesInstance)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> templatesInstance.newTransformer()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> TemplatesImpl 加载 translet bytecode</span></span></code></pre>
-<p>因此后面会依次拆三件事：</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>问题</th><th>对应章节</th></tr></thead><tbody><tr><td><code>templatesInstance</code> 里面为什么要塞 <code>_bytecodes</code>、<code>_name</code>、<code>_tfactory</code></td><td><code>3. TemplatesImpl 载体</code></td></tr><tr><td>payload 类为什么要继承 <code>AbstractTranslet</code>，以及 <code>_bytecodes</code> 如何被加载</td><td><code>3.2 AbstractTranslet</code>、<code>4. 类加载</code></td></tr><tr><td><code>ChainedTransformer</code> 为什么能自然接到 <code>TemplatesImpl.newTransformer()</code></td><td><code>5. 组件桥接</code></td></tr></tbody></table>
-<p>整条链如下：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">反序列化</span></span>
-<span class="line"><span style="color: #abb2bf"> -> outer AnnotationInvocationHandler.readObject()</span></span>
+<h2 id="2-链上还保留着入口触发和串联能力">2. 链上还保留着入口、触发和串联能力</h2>
+<p><code>InvokerTransformer</code> 被重点限制之后，链子并没有整体失效。CC3 能成立，靠的是前半段这些能力还在。</p>
+<p>ysoserial 的 <code>CommonsCollections3</code> 注释直接说明了这一点：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">Variation on CommonsCollections1 that uses InstantiateTransformer instead of</span></span>
+<span class="line"><span style="color: #abb2bf">InvokerTransformer.</span></span></code></pre>
+<p>出处：<a href="https://github.com/frohoff/ysoserial/blob/master/src/main/java/ysoserial/payloads/CommonsCollections3.java#L26-L28">ysoserial CommonsCollections3.java</a></p>
+<p>入口本身没有变化，仍然发生在反序列化阶段：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">ObjectInputStream.readObject()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> AnnotationInvocationHandler.readObject()</span></span></code></pre>
+<p>入口之后的调用过程也基本复用 CC1：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">AnnotationInvocationHandler.readObject()</span></span>
 <span class="line"><span style="color: #abb2bf"> -> proxyMap.entrySet()</span></span>
 <span class="line"><span style="color: #abb2bf"> -> inner AnnotationInvocationHandler.invoke()</span></span>
 <span class="line"><span style="color: #abb2bf"> -> LazyMap.get("entrySet")</span></span>
-<span class="line"><span style="color: #abb2bf"> -> ChainedTransformer</span></span>
-<span class="line"><span style="color: #abb2bf"> -> ConstantTransformer(TrAXFilter.class)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> InstantiateTransformer(Templates.class, templatesInstance)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> new TrAXFilter(templatesInstance)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> templatesInstance.newTransformer()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> TemplatesImpl.defineTransletClasses()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> ClassLoader#defineClass(...)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> translet 类初始化 / 实例化</span></span></code></pre>
-<p>前半段负责触发 <code>LazyMap.get()</code>。</p>
-<p>后半段负责把 transformer 链接到 <code>TemplatesImpl.newTransformer()</code>，再落到 <code>defineClass()</code>。</p>
+<span class="line"><span style="color: #abb2bf"> -> ChainedTransformer.transform(...)</span></span></code></pre>
+<p>这一段提供了三类能力：</p>
+<ul>
+<li>入口能力：<code>readObject()</code> 仍然能带起 <code>AnnotationInvocationHandler.readObject()</code></li>
+<li>触发能力：<code>Map</code> 调用仍然能被送进 <code>LazyMap.get()</code></li>
+<li>串联能力：<code>ChainedTransformer</code> 仍然能继续串联后半段组件</li>
+</ul>
+<p>参与这一段的主要类是：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类</th><th>作用</th></tr></thead><tbody><tr><td><code>AnnotationInvocationHandler</code></td><td>反序列化时带起 <code>entrySet()</code></td></tr><tr><td><code>Proxy</code> / <code>InvocationHandler</code></td><td>把普通 <code>Map</code> 调用转给内层 handler</td></tr><tr><td><code>LazyMap</code></td><td>在 key 不存在时触发 <code>transform()</code></td></tr><tr><td><code>ChainedTransformer</code></td><td>串接后半段执行组件</td></tr></tbody></table>
 <hr>
-<h2 id="3-templatesimpl-载体">3. TemplatesImpl 载体</h2>
-<p><code>XSLT</code> 是一门用来转换 XML 的标准语言，<code>Xalan</code> 是 Apache 提供的一套 XSLT 引擎。<code>TemplatesImpl</code> 是 Xalan 里负责保存和加载 translet 的类。</p>
-<p>正常情况下，XSLT 会先被编译成 translet class bytes，再由 <code>TemplatesImpl</code> 保存，后续调用 <code>newTransformer()</code> 时加载并实例化。</p>
-<p>简化一下：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">XSLT</span></span>
-<span class="line"><span style="color: #abb2bf"> -> translet class bytes</span></span>
-<span class="line"><span style="color: #abb2bf"> -> TemplatesImpl._bytecodes</span></span>
-<span class="line"><span style="color: #abb2bf"> -> newTransformer()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> defineClass(...)</span></span>
-<span class="line"><span style="color: #abb2bf"> -> translet instance</span></span></code></pre>
-<h3 id="31-载荷构造">3.1 载荷构造</h3>
-<p>CC3 里会手动创建一个 <code>TemplatesImpl</code>，然后通过反射设置几个私有字段：</p>
+<h2 id="3-链的后半段缺少继续推进调用的能力">3. 链的后半段缺少继续推进调用的能力</h2>
+<p>前半段还能把调用送进 <code>ChainedTransformer</code>，但调用送到这里并不会自己继续往前走。CC1 原来的后半段，依赖的是一组连续的单步方法调用：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">InvokerTransformer("getMethod")</span></span>
+<span class="line"><span style="color: #abb2bf"> -> InvokerTransformer("invoke")</span></span>
+<span class="line"><span style="color: #abb2bf"> -> InvokerTransformer("exec")</span></span></code></pre>
+<p>关键不只是最后落到 <code>Runtime.exec()</code>，而是这组调用本身提供了一种推进能力：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">拿到一个对象</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 调它的方法</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 取回返回值</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 再把返回值交给下一步</span></span></code></pre>
+<p><code>InvokerTransformer</code> 被限制之后，链子的缺口就出现在这里。后半段缺少的，不是入口，不是触发，也不是最终落点，而是这种把调用一层层继续往前送的能力。</p>
+<hr>
+<h2 id="4-可控-bytecode-加载成为新的执行方向">4. 可控 bytecode 加载成为新的执行方向</h2>
+<p>单步方法调用这条路被压缩之后，后半段就不能再沿着 <code>Method.invoke() -> Runtime.exec()</code> 继续走了。这时“执行”本身也需要换一种理解方式。</p>
+<p>对 Java 来说，代码执行不只有命令执行这一种表现。只要能把可控 bytecode 送进类加载流程，再让 JVM 完成类定义、类初始化或者实例化，外部数据同样会转成执行效果：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">把可控 bytecode 送进某个类</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 触发类加载</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 触发 defineClass / newInstance</span></span>
+<span class="line"><span style="color: #abb2bf"> -> 在类初始化 / 实例化阶段执行代码</span></span></code></pre>
+<p>后半段需要补上的能力也就具体了：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">1. 还能接在 Transformer 体系后面</span></span>
+<span class="line"><span style="color: #abb2bf">2. 不再依赖 InvokerTransformer 这种单步方法调用</span></span>
+<span class="line"><span style="color: #abb2bf">3. 能把调用送到可控 bytecode 的加载位置</span></span></code></pre>
+<p>后面关注的重点，也就不再是 <code>Runtime.exec()</code>，而是哪些组件能把调用推进到类加载型落点。</p>
+<hr>
+<h2 id="5-替代组件开始收敛出来">5. 替代组件开始收敛出来</h2>
+<p>执行方向改成类加载之后，后半段要补的其实是三块能力：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">1. 谁把“某个 Class”变成一次构造调用</span></span>
+<span class="line"><span style="color: #abb2bf">2. 谁让这次构造调用自带副作用，继续往前推进</span></span>
+<span class="line"><span style="color: #abb2bf">3. 谁在后面把这次调用继续串联到 defineClass</span></span></code></pre>
+<p>CC3 里的几个关键类，就是沿着这三块能力逐步收敛出来的。</p>
+<p><code>InstantiateTransformer</code> 先补上第一块能力。它的核心能力就是调用构造函数：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">Constructor</span><span style="color: #E06C75"> con </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> ((Class) input)</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getConstructor</span><span style="color: #ABB2BF">(iParamTypes);</span></span>
+<span class="line"><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">con</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">(iArgs);</span></span></code></pre>
+<p>出处：<code>commons-collections-3.2.1-sources.jar</code> 中的 <code>InstantiateTransformer.java</code></p>
+<p>它适合作为 CC3 的第一步，原因很直接：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">它可以把 ChainedTransformer 的输出从“某个 Class”</span></span>
+<span class="line"><span style="color: #abb2bf">直接变成“调用这个类的构造函数”</span></span></code></pre>
+<p>但只会“调用构造函数”还不够。还需要这个构造函数本身带着可继续推进的副作用，否则调用会停在这里。</p>
+<p>第二块能力落在 <code>TrAXFilter</code> 上。<code>InstantiateTransformer</code> 只能负责调用构造函数，还需要一个“构造函数本身有副作用”的类。</p>
+<p>它的构造函数如下：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TrAXFilter</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Templates</span><span style="color: #E06C75"> templates) throws TransformerConfigurationException {</span></span>
+<span class="line"><span style="color: #E06C75">    _templates </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> templates</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    _transformer </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> (TransformerImpl) </span><span style="color: #E5C07B">templates</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newTransformer</span><span style="color: #ABB2BF">();</span></span>
+<span class="line"><span style="color: #E06C75">    _transformerHandler </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerHandlerImpl</span><span style="color: #E06C75">(_transformer)</span><span style="color: #ABB2BF">;</span></span>
+<span class="line"><span style="color: #E06C75">    _overrideDefaultParser </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">_transformer</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">overrideDefaultParser</span><span style="color: #ABB2BF">();</span></span>
+<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
+<p>源码链接：<a href="https://github.com/JetBrains/jdk8u_jaxp/blob/master/src/com/sun/org/apache/xalan/internal/xsltc/trax/TrAXFilter.java#L581-L595">TrAXFilter.java</a></p>
+<p>在 CC3 里，这一段可以组装成：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ConstantTransformer</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">TrAXFilter</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">InstantiateTransformer</span><span style="color: #E06C75">(</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]{</span><span style="color: #E5C07B">Templates</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">}</span><span style="color: #ABB2BF">,</span></span>
+<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]{templatesInstance}</span></span>
+<span class="line"><span style="color: #E06C75">)</span></span></code></pre>
+<p>等价于：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TrAXFilter</span><span style="color: #E06C75">(templatesInstance)</span></span></code></pre>
+<p>调用会继续进入：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">new TrAXFilter(templatesInstance)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> templatesInstance.newTransformer()</span></span></code></pre>
+<p><code>InstantiateTransformer</code> 和 <code>TrAXFilter</code> 配合之后，调用已经到了 <code>templatesInstance.newTransformer()</code>。第三块能力就落在 <code>TemplatesImpl</code> 上了。<code>TemplatesImpl</code> 是 Xalan 中保存和加载 translet 的类。正常情况下，它保存的是 XSLT 编译后的 bytecode，后续通过 <code>newTransformer()</code> 加载并实例化。</p>
+<p>CC3 借用的，正是它在 <code>newTransformer()</code> 过程中定义并实例化 translet 类的能力。</p>
+<p>要让 <code>templatesInstance.newTransformer()</code> 继续走到类定义，这个对象至少要具备三块状态：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">TemplatesImpl</span><span style="color: #E06C75"> templatesInstance </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TemplatesImpl</span><span style="color: #E06C75">()</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"></span>
 <span class="line"><span style="color: #61AFEF">setField</span><span style="color: #E06C75">(templatesInstance</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #98C379">"_name"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #98C379">"cc3"</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #61AFEF">setField</span><span style="color: #E06C75">(templatesInstance</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #98C379">"_bytecodes"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #C678DD">byte</span><span style="color: #E06C75">[][]{classBytes})</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #61AFEF">setField</span><span style="color: #E06C75">(templatesInstance</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #98C379">"_tfactory"</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerFactoryImpl</span><span style="color: #E06C75">())</span><span style="color: #ABB2BF">;</span></span></code></pre>
-<p>这不是随便猜出来的，而是直接对应 <code>ysoserial</code> 的构造代码：</p>
+<p>ysoserial 中的对应代码：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">T</span><span style="color: #E06C75"> templates </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">tplClass</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">();</span></span>
 <span class="line"></span>
 <span class="line"><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #C678DD">byte</span><span style="color: #E06C75">[] classBytes </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">clazz</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">toBytecode</span><span style="color: #ABB2BF">();</span></span>
@@ -223,15 +271,7 @@
 <span class="line"><span style="color: #E5C07B">Reflections</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">setFieldValue</span><span style="color: #ABB2BF">(templates, </span><span style="color: #98C379">"_tfactory"</span><span style="color: #ABB2BF">, </span><span style="color: #E5C07B">transFactory</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">());</span></span>
 <span class="line"><span style="color: #C678DD">return</span><span style="color: #E06C75"> templates</span><span style="color: #ABB2BF">;</span></span></code></pre>
 <p>出处：<code>C:\Project\HackTools\ysoserial\src\main\java\ysoserial\payloads\util\Gadgets.java</code></p>
-<p>JDK 侧的字段和方法签名如下：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">private java.lang.String _name;</span></span>
-<span class="line"><span style="color: #abb2bf">private byte[][] _bytecodes;</span></span>
-<span class="line"><span style="color: #abb2bf">private transient TransformerFactoryImpl _tfactory;</span></span>
-<span class="line"><span style="color: #abb2bf"></span></span>
-<span class="line"><span style="color: #abb2bf">private void defineTransletClasses();</span></span>
-<span class="line"><span style="color: #abb2bf">private Translet getTransletInstance();</span></span>
-<span class="line"><span style="color: #abb2bf">public synchronized Transformer newTransformer();</span></span></code></pre>
-<p>三个字段的作用：</p>
+<p>三个字段分别负责：</p>
 
 
 
@@ -254,12 +294,7 @@
 
 
 <table><thead><tr><th>字段</th><th>作用</th></tr></thead><tbody><tr><td><code>_bytecodes</code></td><td>保存待加载的 translet class bytes</td></tr><tr><td><code>_name</code></td><td>让 <code>TemplatesImpl</code> 处于可用模板状态</td></tr><tr><td><code>_tfactory</code></td><td>提供 transformer 和类加载所需的工厂上下文</td></tr></tbody></table>
-<p><code>_bytecodes</code> 是二维数组，因为 XSLT 编译结果可能不止一个类：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">_bytecodes[0] -> defineClass(...)</span></span>
-<span class="line"><span style="color: #abb2bf">_bytecodes[1] -> defineClass(...)</span></span>
-<span class="line"><span style="color: #abb2bf">...</span></span></code></pre>
-<h3 id="32-abstracttranslet">3.2 <code>AbstractTranslet</code></h3>
-<p>payload 类通常继承 <code>AbstractTranslet</code>：</p>
+<p>作为 <code>_bytecodes</code> 放进去的类，通常还需要继承 <code>AbstractTranslet</code>：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #C678DD">class</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Evil</span><span style="color: #E06C75"> </span><span style="color: #C678DD">extends</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">AbstractTranslet</span><span style="color: #E06C75"> </span><span style="color: #ABB2BF">{</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">static</span><span style="color: #E06C75"> {</span></span>
 <span class="line"><span style="color: #E06C75">        </span><span style="color: #7F848E; font-style: italic">// class initialization side effect</span></span>
@@ -268,122 +303,51 @@
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">public</span><span style="color: #61AFEF"> </span><span style="color: #C678DD">void</span><span style="color: #61AFEF"> transform</span><span style="color: #ABB2BF">(...)</span><span style="color: #61AFEF"> </span><span style="color: #ABB2BF">{}</span></span>
 <span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">public</span><span style="color: #61AFEF"> </span><span style="color: #C678DD">void</span><span style="color: #61AFEF"> transform</span><span style="color: #ABB2BF">(...)</span><span style="color: #61AFEF"> </span><span style="color: #ABB2BF">{}</span></span>
 <span class="line"><span style="color: #ABB2BF">}</span></span></code></pre>
-<p>这不是随手挑的父类，而是为了让这份 class bytes 符合 <code>TemplatesImpl</code> 对 translet 的预期。</p>
-<hr>
-<h2 id="4-类加载">4. 类加载</h2>
-<p><code>TemplatesImpl</code> 的类加载能力最终落到 <code>ClassLoader#defineClass</code>。</p>
-<h3 id="41-definetransletclasses">4.1 <code>defineTransletClasses()</code></h3>
-<p>OpenJDK 里的关键逻辑可以压成三段：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">if</span><span style="color: #E06C75"> (_bytecodes </span><span style="color: #56B6C2">==</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #E06C75">) {</span></span>
-<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">throw</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerConfigurationException</span><span style="color: #E06C75">(</span><span style="color: #ABB2BF">...</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">_class</span><span style="color: #E06C75">[i] </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">loader</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">defineClass</span><span style="color: #ABB2BF">(</span><span style="color: #E5C07B">_bytecodes</span><span style="color: #ABB2BF">[i]);</span></span></code></pre>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">if</span><span style="color: #E06C75"> (</span><span style="color: #E5C07B">_transletIndex</span><span style="color: #E06C75"> </span><span style="color: #56B6C2">&#x3C;</span><span style="color: #E06C75"> </span><span style="color: #D19A66">0</span><span style="color: #E06C75">) {</span></span>
-<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">throw</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerConfigurationException</span><span style="color: #E06C75">(</span><span style="color: #ABB2BF">...</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
-<p>出处：<a href="https://github.com/openjdk/jdk8u/blob/master/jaxp/src/com/sun/org/apache/xalan/internal/xsltc/trax/TemplatesImpl.java#L390-L486">TemplatesImpl.java</a></p>
-<p>这一步做了两件事：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">_bytecodes -> Class[]</span></span>
-<span class="line"><span style="color: #abb2bf">找到主 translet 类 -> _transletIndex</span></span></code></pre>
-<h3 id="42-gettransletinstance-与-newtransformer">4.2 <code>getTransletInstance()</code> 与 <code>newTransformer()</code></h3>
-<p>继续往下是：</p>
+<p>因为 <code>TemplatesImpl</code> 在加载 <code>_bytecodes</code> 之后，需要识别主 translet 类。继承 <code>AbstractTranslet</code> 是为了满足这个结构要求。</p>
+<p>OpenJDK 中，<code>TemplatesImpl.newTransformer()</code> 会进入：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E06C75">transformer </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerImpl</span><span style="color: #E06C75">(</span><span style="color: #61AFEF">getTransletInstance</span><span style="color: #E06C75">()</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _outputProperties</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _indentNumber</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _tfactory)</span><span style="color: #ABB2BF">;</span></span></code></pre>
+<p><code>getTransletInstance()</code> 继续触发：</p>
 <pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">if</span><span style="color: #E06C75"> (_name </span><span style="color: #56B6C2">==</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #E06C75">) </span><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #C678DD">if</span><span style="color: #E06C75"> (_class </span><span style="color: #56B6C2">==</span><span style="color: #E06C75"> </span><span style="color: #D19A66">null</span><span style="color: #E06C75">) </span><span style="color: #61AFEF">defineTransletClasses</span><span style="color: #E06C75">()</span><span style="color: #ABB2BF">;</span></span>
 <span class="line"><span style="color: #E5C07B">AbstractTranslet</span><span style="color: #E06C75"> translet </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> (AbstractTranslet) </span><span style="color: #E5C07B">_class</span><span style="color: #E06C75">[_transletIndex]</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">();</span></span>
 <span class="line"><span style="color: #E5C07B">translet</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">setTemplates</span><span style="color: #ABB2BF">(</span><span style="color: #E5C07B">this</span><span style="color: #ABB2BF">);</span></span></code></pre>
-<p>然后：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E06C75">transformer </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerImpl</span><span style="color: #E06C75">(</span><span style="color: #61AFEF">getTransletInstance</span><span style="color: #E06C75">()</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _outputProperties</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _indentNumber</span><span style="color: #ABB2BF">,</span><span style="color: #E06C75"> _tfactory)</span><span style="color: #ABB2BF">;</span></span></code></pre>
-<p>这就是为什么 <code>newTransformer()</code> 会带出后面的类加载和实例化。</p>
-<h3 id="43-类定义与类初始化">4.3 类定义与类初始化</h3>
-<p><code>defineClass</code> 只负责把 class 文件格式的 <code>byte[]</code> 定义成 <code>Class</code> 对象。静态代码块不一定在这里执行。</p>
-<p>在 CC3 里，后面的 <code>newInstance()</code> 会触发类初始化，所以 <code>static {}</code> 才会执行。</p>
+<p><code>defineTransletClasses()</code> 的关键语句：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">_class</span><span style="color: #E06C75">[i] </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">loader</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">defineClass</span><span style="color: #ABB2BF">(</span><span style="color: #E5C07B">_bytecodes</span><span style="color: #ABB2BF">[i]);</span></span></code></pre>
+<p>出处：<a href="https://github.com/openjdk/jdk8u/blob/master/jaxp/src/com/sun/org/apache/xalan/internal/xsltc/trax/TemplatesImpl.java#L390-L486">TemplatesImpl.java</a></p>
+<p>这段调用压缩后是：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">TemplatesImpl.newTransformer()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> getTransletInstance()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> defineTransletClasses()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> ClassLoader#defineClass(_bytecodes)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> newInstance()</span></span></code></pre>
+<p><code>defineClass</code> 负责把 <code>byte[]</code> 定义成 <code>Class</code>。后面的 <code>newInstance()</code> 会触发类初始化，因此 payload 中的 <code>static {}</code> 会执行。</p>
 <hr>
-<h2 id="5-组件桥接">5. 组件桥接</h2>
-<h3 id="51-instantiatetransformer">5.1 InstantiateTransformer</h3>
-<p><code>InstantiateTransformer</code> 的作用很简单：把“调用构造函数”包装成 transformer。</p>
-<p>它保存两组信息：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[] iParamTypes</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #C678DD">private</span><span style="color: #E06C75"> </span><span style="color: #C678DD">final</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[] iArgs</span><span style="color: #ABB2BF">;</span></span></code></pre>
-<p>执行时近似等价于：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">Class</span><span style="color: #E06C75"> cls </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> (Class) input</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #E5C07B">Constructor</span><span style="color: #E06C75"> ctor </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">cls</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getConstructor</span><span style="color: #ABB2BF">(iParamTypes);</span></span>
-<span class="line"><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">ctor</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">(iArgs);</span></span></code></pre>
-<p>源码核心两行就是：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #E5C07B">Constructor</span><span style="color: #E06C75"> con </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> ((Class) input)</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">getConstructor</span><span style="color: #ABB2BF">(iParamTypes);</span></span>
-<span class="line"><span style="color: #C678DD">return</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">con</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newInstance</span><span style="color: #ABB2BF">(iArgs);</span></span></code></pre>
-<p>出处：<code>commons-collections-3.2.1-sources.jar</code> 中的 <code>InstantiateTransformer.java</code></p>
-<p>CC3 中：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">ConstantTransformer</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">TrAXFilter</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">)</span><span style="color: #ABB2BF">,</span></span>
-<span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">InstantiateTransformer</span><span style="color: #E06C75">(</span></span>
-<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Class</span><span style="color: #E06C75">[]{</span><span style="color: #E5C07B">Templates</span><span style="color: #ABB2BF">.</span><span style="color: #E5C07B">class</span><span style="color: #E06C75">}</span><span style="color: #ABB2BF">,</span></span>
-<span class="line"><span style="color: #E06C75">    </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">Object</span><span style="color: #E06C75">[]{templatesInstance}</span></span>
-<span class="line"><span style="color: #E06C75">)</span></span></code></pre>
-<p>等价于：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TrAXFilter</span><span style="color: #E06C75">(templatesInstance)</span></span></code></pre>
-<h3 id="52-traxfilter">5.2 TrAXFilter</h3>
-<p><code>TrAXFilter</code> 是连接 <code>InstantiateTransformer</code> 和 <code>TemplatesImpl</code> 的桥。</p>
-<p>构造函数里会调用：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #C678DD">public</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TrAXFilter</span><span style="color: #E06C75">(</span><span style="color: #E5C07B">Templates</span><span style="color: #E06C75"> templates) throws TransformerConfigurationException {</span></span>
-<span class="line"><span style="color: #E06C75">    _templates </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> templates</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #E06C75">    _transformer </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> (TransformerImpl) </span><span style="color: #E5C07B">templates</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">newTransformer</span><span style="color: #ABB2BF">();</span></span>
-<span class="line"><span style="color: #E06C75">    _transformerHandler </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #C678DD">new</span><span style="color: #E06C75"> </span><span style="color: #61AFEF">TransformerHandlerImpl</span><span style="color: #E06C75">(_transformer)</span><span style="color: #ABB2BF">;</span></span>
-<span class="line"><span style="color: #E06C75">    _overrideDefaultParser </span><span style="color: #56B6C2">=</span><span style="color: #E06C75"> </span><span style="color: #E5C07B">_transformer</span><span style="color: #ABB2BF">.</span><span style="color: #61AFEF">overrideDefaultParser</span><span style="color: #ABB2BF">();</span></span>
-<span class="line"><span style="color: #E06C75">}</span></span></code></pre>
-<p>源码链接：<a href="https://github.com/JetBrains/jdk8u_jaxp/blob/master/src/com/sun/org/apache/xalan/internal/xsltc/trax/TrAXFilter.java#L581-L595">TrAXFilter.java</a></p>
-<p>所以：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">new TrAXFilter(templatesInstance)</span></span>
+<h2 id="6-cc3-由此重新成立">6. CC3 由此重新成立</h2>
+<p>把前面的入口、触发过程、执行手段、最终落点接起来，CC3 完整链路就是：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">readObject()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> AnnotationInvocationHandler</span></span>
+<span class="line"><span style="color: #abb2bf"> -> proxyMap.entrySet()</span></span>
+<span class="line"><span style="color: #abb2bf"> -> LazyMap.get("entrySet")</span></span>
+<span class="line"><span style="color: #abb2bf"> -> ChainedTransformer</span></span>
+<span class="line"><span style="color: #abb2bf"> -> ConstantTransformer(TrAXFilter.class)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> InstantiateTransformer(Templates.class, templatesInstance)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> new TrAXFilter(templatesInstance)</span></span>
 <span class="line"><span style="color: #abb2bf"> -> templatesInstance.newTransformer()</span></span>
 <span class="line"><span style="color: #abb2bf"> -> TemplatesImpl.defineTransletClasses()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> ClassLoader#defineClass(...)</span></span></code></pre>
-<h3 id="53-关系总览">5.3 关系总览</h3>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">InstantiateTransformer 负责把 TrAXFilter.class 构造成对象。</span></span>
-<span class="line"><span style="color: #abb2bf">TrAXFilter 的构造函数会调用 templates.newTransformer()。</span></span>
-<span class="line"><span style="color: #abb2bf">templatesInstance 实际上就是一个被填好 _bytecodes 的 TemplatesImpl。</span></span>
-<span class="line"><span style="color: #abb2bf">TemplatesImpl.newTransformer() 会进入 getTransletInstance()。</span></span>
-<span class="line"><span style="color: #abb2bf">getTransletInstance() 最终走到 defineTransletClasses() / defineClass()。</span></span></code></pre>
-<hr>
-<h2 id="6-小结">6. 小结</h2>
-<p>CC3 的核心不是动态代理，而是后半段的替换：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">InvokerTransformer 反射 Runtime</span></span></code></pre>
-<p>换成：</p>
-<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">InstantiateTransformer</span></span>
-<span class="line"><span style="color: #abb2bf"> -> new TrAXFilter(templatesInstance)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> ClassLoader#defineClass(...)</span></span>
+<span class="line"><span style="color: #abb2bf"> -> translet 类初始化 / 实例化</span></span></code></pre>
+<p>CC1 和 CC3 的后半段，对比起来就是：</p>
+<pre is:raw="" class="astro-code one-dark-pro" style="background-color: #282c34; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0"><code><span class="line"><span style="color: #abb2bf">CC1:</span></span>
+<span class="line"><span style="color: #abb2bf">InvokerTransformer</span></span>
+<span class="line"><span style="color: #abb2bf"> -> Runtime.exec()</span></span>
+<span class="line"><span style="color: #abb2bf"></span></span>
+<span class="line"><span style="color: #abb2bf">CC3:</span></span>
+<span class="line"><span style="color: #abb2bf">InstantiateTransformer</span></span>
+<span class="line"><span style="color: #abb2bf"> -> TrAXFilter(templatesInstance)</span></span>
 <span class="line"><span style="color: #abb2bf"> -> TemplatesImpl.newTransformer()</span></span>
-<span class="line"><span style="color: #abb2bf"> -> defineClass(_bytecodes)</span></span></code></pre>
-<p>各组件角色：</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>组件</th><th>角色</th></tr></thead><tbody><tr><td><code>LazyMap</code></td><td>触发 transformer 链</td></tr><tr><td><code>ConstantTransformer</code></td><td>固定返回 <code>TrAXFilter.class</code></td></tr><tr><td><code>InstantiateTransformer</code></td><td>调用 <code>TrAXFilter(Templates)</code> 构造函数</td></tr><tr><td><code>TrAXFilter</code></td><td>构造时调用 <code>templates.newTransformer()</code></td></tr><tr><td><code>TemplatesImpl</code></td><td>加载并实例化 <code>_bytecodes</code> 里的 translet 类</td></tr></tbody></table>
-<p>一句话：</p>
+<span class="line"><span style="color: #abb2bf"> -> ClassLoader#defineClass(_bytecodes)</span></span></code></pre>
 <blockquote>
-<p>CC3 用 <code>InstantiateTransformer</code> 构造 <code>TrAXFilter</code>，再借 <code>TrAXFilter</code> 构造函数触发 <code>TemplatesImpl.newTransformer()</code>，最终让 <code>TemplatesImpl</code> 通过 <code>defineClass</code> 加载可控字节码。</p>
+<p>CC3 保留 CC1 的入口和触发过程，把执行手段从 <code>InvokerTransformer</code> 换成 <code>InstantiateTransformer + TrAXFilter</code>，把最终落点切到 <code>TemplatesImpl#defineClass</code>。</p>
 </blockquote>
       </article>
 
